@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -13,6 +14,7 @@ import BalanceTest from "./components/detection/BalanceTest";
 import SpeechTest from "./components/detection/SpeechTest";
 import Emergency from "./components/Emergency";
 import StrokeEducation from "./components/education/StrokeEducation";
+import ComprehensiveAnalysis from "./components/analysis/ComprehensiveAnalysis";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +33,7 @@ const App = () => (
           <Route path="/balance-detection" element={<BalanceTest />} />
           <Route path="/speech-detection" element={<SpeechTest />} />
           <Route path="/emergency" element={<Emergency />} />
+          <Route path="/comprehensive-analysis" element={<ComprehensiveAnalysis />} />
           <Route path="/education/:topic" element={<StrokeEducation />} />
           <Route path="/education" element={<StrokeEducation />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

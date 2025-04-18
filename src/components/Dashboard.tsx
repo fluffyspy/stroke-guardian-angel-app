@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Eye, Activity, MessageSquare, Phone } from "lucide-react";
+import { Eye, Activity, MessageSquare, Phone, Brain } from "lucide-react";
 import { Patient } from "@/types";
 
 const Dashboard = () => {
@@ -73,6 +73,14 @@ const Dashboard = () => {
                 <span className="text-medical-red">Emergency</span>
               </Button>
             </div>
+
+            <Button 
+              className="w-full mt-4 bg-primary"
+              onClick={() => navigate("/comprehensive-analysis")}
+            >
+              <Brain className="h-5 w-5 mr-2" />
+              Comprehensive Analysis
+            </Button>
           </CardContent>
         </Card>
 

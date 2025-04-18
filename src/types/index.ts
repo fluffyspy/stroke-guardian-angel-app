@@ -24,3 +24,13 @@ export interface StrokeDetectionResult {
   timestamp: Date;
   details?: string;
 }
+
+export interface CombinedAnalysisResult {
+  balance?: StrokeDetectionResult;
+  eye?: StrokeDetectionResult;
+  speech?: StrokeDetectionResult;
+  overallResult: 'normal' | 'abnormal' | 'inconclusive';
+  riskLevel: 'low' | 'moderate' | 'high';
+  timestamp: Date;
+  recommendations: string[];
+}
