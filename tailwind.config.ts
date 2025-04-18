@@ -28,6 +28,14 @@ export default {
 					DEFAULT: 'hsl(var(--primary))',
 					foreground: 'hsl(var(--primary-foreground))'
 				},
+				medical: {
+					blue: '#007AFF',
+					lightblue: '#0A84FF',
+					red: '#FF3B30',
+					green: '#34C759',
+					gray: '#8E8E93',
+					lightgray: '#E5E5EA'
+				},
 				secondary: {
 					DEFAULT: 'hsl(var(--secondary))',
 					foreground: 'hsl(var(--secondary-foreground))'

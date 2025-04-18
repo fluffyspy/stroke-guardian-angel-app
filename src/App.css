@@ -1,42 +1,69 @@
 #root {
-  max-width: 1280px;
+  width: 100%;
+  min-height: 100vh;
   margin: 0 auto;
-  padding: 2rem;
   text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
+/* Mobile-first styling */
+@media (max-width: 768px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
+/* Make text more readable on small screens */
+@media (max-width: 640px) {
+  h1 {
+    font-size: 1.75rem;
+  }
+  h2 {
+    font-size: 1.5rem;
+  }
+  .text-xl {
+    font-size: 1.1rem;
   }
 }
 
-.card {
-  padding: 2em;
+/* Medical color classes */
+.text-medical-blue {
+  color: #007AFF;
 }
 
-.read-the-docs {
-  color: #888;
+.text-medical-red {
+  color: #FF3B30;
+}
+
+.text-medical-green {
+  color: #34C759;
+}
+
+.bg-medical-blue {
+  background-color: #007AFF;
+}
+
+.bg-medical-red {
+  background-color: #FF3B30;
+}
+
+.bg-medical-green {
+  background-color: #34C759;
+}
+
+/* Animation for pulse effect on emergency button */
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.pulse-animation {
+  animation: pulse 2s infinite;
 }
