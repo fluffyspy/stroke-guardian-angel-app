@@ -9,7 +9,20 @@ const config: CapacitorConfig = {
     url: 'https://92cc6c6e-2fd6-4266-a5df-fe7dc56c7f3a.lovableproject.com?forceHideBadge=true',
     cleartext: true
   },
-  bundledWebRuntime: false
+  plugins: {
+    Camera: {
+      saveToGallery: true,
+      quality: 90
+    },
+    // Add necessary permissions
+    Permissions: {
+      aliases: {
+        camera: 'camera',
+        microphone: 'microphone',
+        location: 'location'
+      }
+    }
+  }
 };
 
 export default config;
