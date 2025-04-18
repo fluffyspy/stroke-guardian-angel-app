@@ -5,6 +5,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Mic, Square, AlertTriangle, CheckCircle, MessageSquare } from "lucide-react";
 import { StrokeDetectionResult } from "@/types";
+import { toast } from "@/hooks/use-toast";
 
 const SpeechTest = () => {
   const navigate = useNavigate();
@@ -13,13 +14,12 @@ const SpeechTest = () => {
   const [testCompleted, setTestCompleted] = useState(false);
   const [result, setResult] = useState<StrokeDetectionResult | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-
+  
   const startRecording = () => {
     setIsRecording(true);
     setRecordingTime(0);
     
-    // In a real app, this would use the MediaRecorder API to capture audio
-    // For now, we'll just simulate with a timer
+    // Start the recording timer
     timerRef.current = setInterval(() => {
       setRecordingTime(prev => {
         if (prev >= 9) {
@@ -29,6 +29,13 @@ const SpeechTest = () => {
         return prev + 1;
       });
     }, 1000);
+    
+    // In a mobile environment, we would use Capacitor's APIs here
+    // For web preview, we'll continue with the simulation
+    toast({
+      title: "Recording Started",
+      description: "Your speech is being recorded. Please speak clearly.",
+    });
   };
 
   const stopRecording = () => {
@@ -36,6 +43,11 @@ const SpeechTest = () => {
       clearInterval(timerRef.current);
     }
     setIsRecording(false);
+    
+    toast({
+      title: "Processing Recording",
+      description: "Analyzing your speech patterns...",
+    });
     
     // Simulate processing and results
     setTimeout(() => {
