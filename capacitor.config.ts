@@ -16,8 +16,8 @@ const config: CapacitorConfig = {
     },
     Permissions: {
       aliases: {
-        camera: 'camera',
-        microphone: 'microphone'
+        camera: 'android.permission.CAMERA',
+        microphone: 'android.permission.RECORD_AUDIO'
       }
     }
   }

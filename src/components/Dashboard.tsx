@@ -55,14 +55,14 @@ const Dashboard = () => {
     >
       <motion.div variants={item} className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-primary">Stroke Sense</h1>
-        <Button 
-          variant="outline" 
-          onClick={() => navigate("/profile")}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          Patient Profile
-        </Button>
+        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+          <Button 
+            variant="outline" 
+            onClick={() => navigate("/profile")}
+          >
+            Patient Profile
+          </Button>
+        </motion.div>
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
