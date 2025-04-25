@@ -23,7 +23,8 @@ const EyeTrackingTest = () => {
     isCountingDown,
     directions,
     startTest,
-    resetTest
+    resetTest,
+    manuallyValidateDirection
   } = useEyeTracking();
 
   return (
@@ -77,7 +78,7 @@ const EyeTrackingTest = () => {
               {process.env.NODE_ENV === "development" && waitingForValidation && !testCompleted && (
                 <div className="mt-4">
                   <Button 
-                    onClick={() => console.log("Debug mode enabled")} 
+                    onClick={() => manuallyValidateDirection(currentDirection)} 
                     variant="outline" 
                     size="sm" 
                     className="bg-yellow-100 text-yellow-800 border-yellow-300"

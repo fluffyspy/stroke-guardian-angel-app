@@ -108,6 +108,30 @@ export const useEyeTracking = () => {
     setWaitingForValidation(false);
   };
 
+  const manuallyValidateDirection = (direction: string) => {
+    console.log("Debug mode enabled");
+    
+    // Mark the current direction as matched
+    setMatchedDirections(prev => new Set([...prev, direction]));
+    toast.success(`${direction} direction manually validated!`, { duration: 1500 });
+    
+    // Proceed to the next direction or complete the test
+    setTimeout(() => {
+      if (currentDirectionIndex + 1 >= directions.length) {
+        setTestCompleted(true);
+        setResult({
+          detectionType: 'eye',
+          result: 'normal',
+          timestamp: new Date(),
+          details: `Test completed with manual validation.`
+        });
+      } else {
+        setCurrentDirectionIndex(prev => prev + 1);
+        setWaitingForValidation(false);
+      }
+    }, 1000);
+  };
+
   return {
     testStarted,
     testCompleted,
@@ -120,6 +144,7 @@ export const useEyeTracking = () => {
     isCountingDown,
     directions,
     startTest,
-    resetTest
+    resetTest,
+    manuallyValidateDirection
   };
 };
