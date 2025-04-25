@@ -16,7 +16,14 @@ import Emergency from "./components/Emergency";
 import StrokeEducation from "./components/education/StrokeEducation";
 import ComprehensiveAnalysis from "./components/analysis/ComprehensiveAnalysis";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
