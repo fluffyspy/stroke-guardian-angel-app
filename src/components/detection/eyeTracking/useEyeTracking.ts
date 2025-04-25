@@ -19,28 +19,32 @@ export const useEyeTracking = () => {
   const [countdown, setCountdown] = useState(3);
   const [isCountingDown, setIsCountingDown] = useState(false);
 
-  // Start countdown effect
+  // Start countdown effect - Fixed by ensuring the countdown properly completes
   useEffect(() => {
-    if (testStarted && !isCountingDown && countdown > 0) {
-      setIsCountingDown(true);
-      
-      const timer = setInterval(() => {
-        setCountdown((prevCount) => {
+    let timer: NodeJS.Timeout | null = null;
+    
+    if (testStarted && isCountingDown) {
+      timer = setInterval(() => {
+        setCountdown(prevCount => {
           if (prevCount <= 1) {
-            clearInterval(timer);
+            clearInterval(timer as NodeJS.Timeout);
             setIsCountingDown(false);
             return 0;
           }
           return prevCount - 1;
         });
       }, 1000);
-      
-      return () => clearInterval(timer);
     }
-  }, [testStarted, isCountingDown, countdown]);
+    
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [testStarted, isCountingDown]);
 
   // Handle test progression
   useEffect(() => {
+    let timeout: NodeJS.Timeout | null = null;
+    
     if (testStarted && !testCompleted && !isCountingDown && countdown === 0) {
       if (currentDirectionIndex < directions.length && !waitingForValidation) {
         const direction = directions[currentDirectionIndex];
@@ -51,7 +55,7 @@ export const useEyeTracking = () => {
           duration: 3000
         });
         
-        const timeout = setTimeout(() => {
+        timeout = setTimeout(() => {
           const success = Math.random() > 0.2;
           
           if (success) {
@@ -76,10 +80,12 @@ export const useEyeTracking = () => {
             }
           }, 1000);
         }, 3000);
-        
-        return () => clearTimeout(timeout);
       }
     }
+    
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
   }, [testStarted, testCompleted, isCountingDown, countdown, currentDirectionIndex, waitingForValidation, matchedDirections]);
 
   const startTest = () => {

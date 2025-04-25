@@ -16,7 +16,12 @@ const WelcomeScreen = ({ onStart }: WelcomeScreenProps) => {
         You'll be asked to look in 8 different directions one by one.
         Each direction requires you to hold your gaze for 3 seconds.
       </p>
-      <Button onClick={onStart} className="animate-pulse">Start Test</Button>
+      <Button 
+        onClick={onStart} 
+        className="animate-pulse"
+      >
+        Start Test
+      </Button>
     </div>
   );
 };
