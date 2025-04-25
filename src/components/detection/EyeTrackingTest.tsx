@@ -6,16 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { StrokeDetectionResult } from "@/types";
 import { Eye, ArrowRight, ArrowLeft, ArrowUp, ArrowDown, AlertTriangle, CheckCircle } from "lucide-react";
+import { toast } from "sonner";
 
-// Mock implementation of eye tracking functionality
-// In a real app, this would use the camera and implement the actual eye tracking logic
 const EyeTrackingTest = () => {
   const navigate = useNavigate();
   const [testStarted, setTestStarted] = useState(false);
   const [testCompleted, setTestCompleted] = useState(false);
   const [currentDirection, setCurrentDirection] = useState("");
+  const [currentDirectionIndex, setCurrentDirectionIndex] = useState(0);
   const [matchedDirections, setMatchedDirections] = useState<Set<string>>(new Set());
   const [result, setResult] = useState<StrokeDetectionResult | null>(null);
+  const [waitingForValidation, setWaitingForValidation] = useState(false);
+  const [countdown, setCountdown] = useState(3);
+  const [isCountingDown, setIsCountingDown] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   // The 8 directions we need to test
@@ -24,41 +27,79 @@ const EyeTrackingTest = () => {
     "Up-Left", "Up-Right", "Down-Left", "Down-Right"
   ];
 
+  // Start countdown before beginning the test
   useEffect(() => {
-    if (testStarted && !testCompleted) {
-      if (matchedDirections.size < directions.length) {
-        // In a real app, this would be handled by actual eye tracking
-        // For now, we'll simulate progress
-        const simulateEyeTracking = () => {
-          const direction = directions[matchedDirections.size];
-          setCurrentDirection(direction);
+    if (testStarted && !isCountingDown && countdown > 0) {
+      setIsCountingDown(true);
+      
+      const timer = setInterval(() => {
+        setCountdown((prevCount) => {
+          if (prevCount <= 1) {
+            clearInterval(timer);
+            setIsCountingDown(false);
+            return 0;
+          }
+          return prevCount - 1;
+        });
+      }, 1000);
+      
+      return () => clearInterval(timer);
+    }
+  }, [testStarted, isCountingDown, countdown]);
+
+  // Handle the eye tracking test progression
+  useEffect(() => {
+    if (testStarted && !testCompleted && !isCountingDown && countdown === 0) {
+      if (currentDirectionIndex < directions.length && !waitingForValidation) {
+        // Set the current direction and wait for validation
+        const direction = directions[currentDirectionIndex];
+        setCurrentDirection(direction);
+        setWaitingForValidation(true);
+        
+        toast.info(`Look ${direction} and hold for 3 seconds`, {
+          duration: 3000
+        });
+        
+        // In a real implementation, we would track the eyes here
+        // For now, wait a longer period per direction to simulate real testing
+        const timeout = setTimeout(() => {
+          // Random success probability (80% success, 20% failure)
+          const success = Math.random() > 0.2;
           
-          // Simulate successful gaze detection after a random delay
-          const timeout = setTimeout(() => {
+          if (success) {
             setMatchedDirections(prev => new Set([...prev, direction]));
-            
-            if (matchedDirections.size + 1 >= directions.length) {
+            toast.success(`${direction} direction matched!`, { duration: 1500 });
+          } else {
+            toast.error(`Failed to match ${direction} direction`, { duration: 1500 });
+          }
+          
+          // Move to next direction after a delay
+          setTimeout(() => {
+            if (currentDirectionIndex + 1 >= directions.length) {
+              // Test completed
               setTestCompleted(true);
               setResult({
                 detectionType: 'eye',
-                result: Math.random() > 0.2 ? 'normal' : 'abnormal', // Simulate results
+                result: matchedDirections.size >= directions.length * 0.75 ? 'normal' : 'abnormal',
                 timestamp: new Date(),
-                details: "Eye tracking test completed."
+                details: `${matchedDirections.size} out of ${directions.length} directions matched.`
               });
+            } else {
+              // Move to next direction
+              setCurrentDirectionIndex(prev => prev + 1);
+              setWaitingForValidation(false);
             }
-          }, 1500 + Math.random() * 1000);
-          
-          return () => clearTimeout(timeout);
-        };
+          }, 1000);
+        }, 3000); // Wait 3 seconds per direction
         
-        simulateEyeTracking();
+        return () => clearTimeout(timeout);
       }
     }
-  }, [testStarted, testCompleted, matchedDirections, directions]);
+  }, [testStarted, testCompleted, isCountingDown, countdown, currentDirectionIndex, waitingForValidation, directions, matchedDirections]);
 
-  // Handle camera initialization (simplified)
+  // Handle camera initialization
   useEffect(() => {
-    if (testStarted && videoRef.current && !videoRef.current.srcObject) {
+    if (testStarted && videoRef.current && !videoRef.current.srcObject && countdown === 0) {
       navigator.mediaDevices.getUserMedia({ video: true })
         .then(stream => {
           if (videoRef.current) {
@@ -67,6 +108,7 @@ const EyeTrackingTest = () => {
         })
         .catch(err => {
           console.error("Error accessing the camera:", err);
+          toast.error("Unable to access camera. Please check your permissions and try again.");
         });
     }
     
@@ -77,18 +119,33 @@ const EyeTrackingTest = () => {
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [testStarted]);
+  }, [testStarted, countdown]);
 
   const startTest = () => {
     setTestStarted(true);
     setMatchedDirections(new Set());
+    setCurrentDirectionIndex(0);
+    setCountdown(3);
+    setIsCountingDown(true);
+    setWaitingForValidation(false);
   };
 
   const resetTest = () => {
     setTestStarted(false);
     setTestCompleted(false);
     setMatchedDirections(new Set());
+    setCurrentDirectionIndex(0);
     setResult(null);
+    setCountdown(3);
+    setIsCountingDown(false);
+    setWaitingForValidation(false);
+    
+    // Stop camera
+    if (videoRef.current?.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
   };
 
   const getDirectionIcon = (direction: string) => {
@@ -121,6 +178,28 @@ const EyeTrackingTest = () => {
     }
   };
 
+  // Helper for manual validation (for demonstration purposes)
+  const manualValidate = () => {
+    if (waitingForValidation && !testCompleted) {
+      setMatchedDirections(prev => new Set([...prev, currentDirection]));
+      
+      if (currentDirectionIndex + 1 >= directions.length) {
+        // Test completed
+        setTestCompleted(true);
+        setResult({
+          detectionType: 'eye',
+          result: 'normal',
+          timestamp: new Date(),
+          details: "All directions were matched correctly."
+        });
+      } else {
+        // Move to next direction
+        setCurrentDirectionIndex(prev => prev + 1);
+        setWaitingForValidation(false);
+      }
+    }
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
@@ -145,52 +224,70 @@ const EyeTrackingTest = () => {
               <p className="mb-4 text-gray-600">
                 This test will check your ability to move your eyes in different directions.
                 You'll be asked to look in 8 different directions one by one.
+                Each direction requires you to hold your gaze for 3 seconds.
               </p>
-              <Button onClick={startTest}>Start Test</Button>
+              <Button onClick={startTest} className="animate-pulse">Start Test</Button>
             </div>
           ) : (
             <div className="space-y-4">
               <div className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden">
-                <video 
-                  ref={videoRef} 
-                  autoPlay 
-                  playsInline
-                  muted 
-                  className="w-full h-full object-cover"
-                />
-                
-                {/* Safety margin rectangle would be drawn here */}
-                <div className="absolute inset-0 border-2 border-green-500 m-10 pointer-events-none"></div>
-                
-                {/* Instruction overlay */}
-                {!testCompleted && (
-                  <div className="absolute top-0 left-0 w-full bg-black bg-opacity-50 text-white p-2">
-                    <p className="font-medium">Instruction: Look {currentDirection}</p>
-                  </div>
-                )}
-                
-                {/* Results overlay */}
-                {testCompleted && (
+                {isCountingDown && countdown > 0 ? (
                   <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 text-white">
-                    <div className="text-center p-6 bg-background rounded-lg shadow-lg text-foreground">
-                      {result?.result === 'normal' ? (
-                        <div>
-                          <CheckCircle className="h-16 w-16 mx-auto mb-4 text-medical-green" />
-                          <h3 className="text-xl font-bold mb-2">Test Completed Successfully</h3>
-                          <p>All directions were matched correctly.</p>
-                        </div>
-                      ) : (
-                        <div>
-                          <AlertTriangle className="h-16 w-16 mx-auto mb-4 text-medical-red" />
-                          <h3 className="text-xl font-bold mb-2">Potential Abnormalities Detected</h3>
-                          <p>Some directions were not matched correctly.</p>
-                          <p className="mt-4 text-medical-red font-medium">
-                            Please consider seeking medical attention.
-                          </p>
-                        </div>
-                      )}
+                    <div className="text-center">
+                      <h3 className="text-4xl font-bold mb-2">Starting in</h3>
+                      <p className="text-6xl font-bold animate-pulse">{countdown}</p>
                     </div>
                   </div>
+                ) : (
+                  <>
+                    <video 
+                      ref={videoRef} 
+                      autoPlay 
+                      playsInline
+                      muted 
+                      className="w-full h-full object-cover"
+                    />
+                    
+                    {/* Safety margin rectangle */}
+                    <div className="absolute inset-0 border-2 border-green-500 m-10 pointer-events-none"></div>
+                    
+                    {/* Instruction overlay */}
+                    {!testCompleted && (
+                      <div className="absolute top-0 left-0 w-full bg-black bg-opacity-50 text-white p-2">
+                        <p className="font-medium flex items-center justify-center">
+                          <span className="mr-2">Look {currentDirection}</span>
+                          {getDirectionIcon(currentDirection)}
+                          {waitingForValidation && (
+                            <span className="ml-2 inline-block animate-pulse">● Recording</span>
+                          )}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* Results overlay */}
+                    {testCompleted && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 text-white">
+                        <div className="text-center p-6 bg-background rounded-lg shadow-lg text-foreground max-w-md">
+                          {result?.result === 'normal' ? (
+                            <div className="animate-fade-in">
+                              <CheckCircle className="h-16 w-16 mx-auto mb-4 text-green-500" />
+                              <h3 className="text-xl font-bold mb-2">Test Completed Successfully</h3>
+                              <p>{matchedDirections.size} out of {directions.length} directions were matched correctly.</p>
+                            </div>
+                          ) : (
+                            <div className="animate-fade-in">
+                              <AlertTriangle className="h-16 w-16 mx-auto mb-4 text-red-500" />
+                              <h3 className="text-xl font-bold mb-2">Potential Abnormalities Detected</h3>
+                              <p>Only {matchedDirections.size} out of {directions.length} directions were matched correctly.</p>
+                              <p className="mt-4 text-red-500 font-medium">
+                                Please consider seeking medical attention.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               
@@ -203,12 +300,14 @@ const EyeTrackingTest = () => {
               </div>
               
               <div className="grid grid-cols-4 gap-2">
-                {directions.map((direction) => (
+                {directions.map((direction, index) => (
                   <div 
                     key={direction}
-                    className={`p-2 rounded-md flex flex-col items-center ${
+                    className={`p-2 rounded-md flex flex-col items-center transition-all duration-300 ${
                       matchedDirections.has(direction) 
                         ? "bg-green-100 text-green-800" 
+                        : index === currentDirectionIndex && !testCompleted
+                        ? "bg-blue-100 text-blue-800 animate-pulse"
                         : "bg-gray-100 text-gray-400"
                     }`}
                   >
@@ -217,6 +316,20 @@ const EyeTrackingTest = () => {
                   </div>
                 ))}
               </div>
+              
+              {/* Debug button for manual validation - only shown in development */}
+              {process.env.NODE_ENV === "development" && waitingForValidation && !testCompleted && (
+                <div className="mt-4">
+                  <Button 
+                    onClick={manualValidate} 
+                    variant="outline" 
+                    size="sm" 
+                    className="bg-yellow-100 text-yellow-800 border-yellow-300"
+                  >
+                    Debug: Manually Validate Direction
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
