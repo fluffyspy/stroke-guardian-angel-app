@@ -1,4 +1,5 @@
-import { useRef, useEffect } from "react";
+
+import { useEffect } from "react";
 import { toast } from "sonner";
 import { Eye, ArrowRight, ArrowLeft, ArrowUp, ArrowDown, AlertTriangle, CheckCircle } from "lucide-react";
 
@@ -12,6 +13,8 @@ interface CameraViewProps {
   result: { result: string } | null;
   matchedDirections: Set<string>;
   directions: string[];
+  videoRef: React.RefObject<HTMLVideoElement>;
+  detectedDirection?: string;
 }
 
 const CameraView = ({
@@ -23,10 +26,10 @@ const CameraView = ({
   waitingForValidation,
   result,
   matchedDirections,
-  directions
+  directions,
+  videoRef,
+  detectedDirection
 }: CameraViewProps) => {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-
   useEffect(() => {
     if (testStarted && videoRef.current && !videoRef.current.srcObject && countdown === 0) {
       navigator.mediaDevices.getUserMedia({ video: true })
@@ -47,7 +50,7 @@ const CameraView = ({
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [testStarted, countdown]);
+  }, [testStarted, countdown, videoRef]);
 
   const getDirectionIcon = (direction: string) => {
     switch(direction) {
@@ -98,6 +101,7 @@ const CameraView = ({
             className="w-full h-full object-cover"
           />
           
+          {/* Safety margin rectangle */}
           <div className="absolute inset-0 border-2 border-green-500 m-10 pointer-events-none"></div>
           
           {!testCompleted && (
@@ -109,6 +113,11 @@ const CameraView = ({
                   <span className="ml-2 inline-block animate-pulse">● Recording</span>
                 )}
               </p>
+              {detectedDirection && waitingForValidation && (
+                <p className="text-xs text-center mt-1">
+                  Detected: {detectedDirection}
+                </p>
+              )}
             </div>
           )}
           

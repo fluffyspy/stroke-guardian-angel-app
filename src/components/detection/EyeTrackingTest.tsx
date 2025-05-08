@@ -24,7 +24,9 @@ const EyeTrackingTest = () => {
     directions,
     startTest,
     resetTest,
-    manuallyValidateDirection
+    manuallyValidateDirection,
+    videoRef,
+    detectedDirection
   } = useEyeTracking();
 
   return (
@@ -58,6 +60,8 @@ const EyeTrackingTest = () => {
                 result={result}
                 matchedDirections={matchedDirections}
                 directions={directions}
+                videoRef={videoRef}
+                detectedDirection={detectedDirection}
               />
               
               <div className="space-y-2">
