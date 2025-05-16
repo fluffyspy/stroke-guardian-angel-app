@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Brain } from "lucide-react";
 import { Patient } from "@/types";
 import { motion } from "framer-motion";
+import { checkUserSession } from "@/services/authService";
 import DashboardHeader from "./dashboard/DashboardHeader";
 import WelcomeCard from "./dashboard/WelcomeCard";
 import DetectionModules from "./dashboard/DetectionModules";
@@ -16,15 +17,15 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if the user is logged in but don't redirect if not
-    const storedPatient = localStorage.getItem("patient");
-    const token = localStorage.getItem("authToken");
-    
-    if (storedPatient && token) {
-      setPatient(JSON.parse(storedPatient));
+    async function checkSession() {
+      const userData = await checkUserSession();
+      if (userData) {
+        setPatient(userData);
+      }
+      setIsLoading(false);
     }
     
-    setIsLoading(false);
+    checkSession();
   }, []);
 
   if (isLoading) {

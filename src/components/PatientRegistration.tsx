@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -7,23 +6,30 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Patient, EmergencyContact } from "@/types";
+import { registerUser } from "@/services/authService";
+import { useToast } from "@/hooks/use-toast";
 
 const PatientRegistration = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [step, setStep] = useState<number>(1);
   const [patient, setPatient] = useState<Patient>({
     name: "",
+    email: "",
     age: 0,
     height: 0,
     weight: 0,
     medicalHistory: "",
     emergencyContacts: [],
   });
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [currentContact, setCurrentContact] = useState<EmergencyContact>({
     name: "",
     relationship: "",
     phoneNumber: "",
   });
+  const [isLoading, setIsLoading] = useState(false);
 
   const handlePatientChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -45,10 +51,40 @@ const PatientRegistration = () => {
     }
   };
 
-  const handleSubmit = () => {
-    // Here you would normally send data to a backend
-    localStorage.setItem("patient", JSON.stringify(patient));
-    navigate("/dashboard");
+  const handleSubmit = async () => {
+    if (password !== confirmPassword) {
+      toast({
+        title: "Passwords do not match",
+        description: "Please ensure both passwords are identical",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Register the user with the registration data
+      await registerUser({
+        ...patient,
+        password
+      });
+      
+      toast({
+        title: "Registration successful",
+        description: "Welcome to Stroke Sense!",
+      });
+      
+      navigate("/dashboard");
+    } catch (error) {
+      console.error("Registration error:", error);
+      toast({
+        title: "Registration failed",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const nextStep = () => setStep(step + 1);
@@ -60,11 +96,57 @@ const PatientRegistration = () => {
         <CardHeader>
           <CardTitle className="text-2xl text-center text-primary">Patient Registration</CardTitle>
           <CardDescription className="text-center">
-            Step {step} of 3: {step === 1 ? "Basic Information" : step === 2 ? "Medical History" : "Emergency Contacts"}
+            Step {step} of 4: {
+              step === 1 ? "Account Information" : 
+              step === 2 ? "Basic Information" : 
+              step === 3 ? "Medical History" : 
+              "Emergency Contacts"
+            }
           </CardDescription>
         </CardHeader>
         <CardContent>
           {step === 1 && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email Address</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="your.email@example.com"
+                  value={patient.email}
+                  onChange={handlePatientChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="Create a password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  placeholder="Confirm your password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
@@ -128,7 +210,7 @@ const PatientRegistration = () => {
             </div>
           )}
 
-          {step === 2 && (
+          {step === 3 && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="medicalHistory">Medical History</Label>
@@ -153,7 +235,7 @@ const PatientRegistration = () => {
             </div>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Emergency Contacts</Label>
@@ -227,16 +309,28 @@ const PatientRegistration = () => {
         </CardContent>
         <CardFooter className="flex justify-between">
           {step > 1 ? (
-            <Button variant="outline" onClick={prevStep}>
+            <Button variant="outline" onClick={prevStep} disabled={isLoading}>
               Back
             </Button>
           ) : (
             <div></div>
           )}
-          {step < 3 ? (
-            <Button onClick={nextStep}>Next</Button>
+          {step < 4 ? (
+            <Button onClick={nextStep} disabled={isLoading}>Next</Button>
           ) : (
-            <Button onClick={handleSubmit}>Complete Registration</Button>
+            <Button onClick={handleSubmit} disabled={isLoading}>
+              {isLoading ? (
+                <span className="flex items-center">
+                  <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Registering...
+                </span>
+              ) : (
+                "Complete Registration"
+              )}
+            </Button>
           )}
         </CardFooter>
       </Card>

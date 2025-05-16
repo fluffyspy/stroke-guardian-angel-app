@@ -15,7 +15,12 @@ const WelcomeCard = ({ patient }: WelcomeCardProps) => {
           <h2 className="text-xl font-semibold mb-2">
             {patient ? `Welcome back, ${patient.name}!` : "Welcome to Stroke Sense!"}
           </h2>
-          <p className="text-gray-600">Your regular assessment helps us monitor your health more effectively.</p>
+          <p className="text-gray-600">
+            {patient 
+              ? "Your regular assessment helps us monitor your health more effectively."
+              : "Register or log in to track your health assessments and get personalized insights."
+            }
+          </p>
         </CardContent>
       </Card>
     </motion.div>
