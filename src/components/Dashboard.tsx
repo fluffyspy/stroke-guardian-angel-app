@@ -3,29 +3,67 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Eye, Activity, MessageSquare, Phone, Brain } from "lucide-react";
+import { Eye, Activity, MessageSquare, Phone, Brain, LogOut } from "lucide-react";
 import { Patient } from "@/types";
 import { motion } from "framer-motion";
+import { logoutUser } from "@/services/authService";
+import { useToast } from "@/hooks/use-toast";
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [patient, setPatient] = useState<Patient | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const storedPatient = localStorage.getItem("patient");
-    if (storedPatient) {
+    const token = localStorage.getItem("authToken");
+    
+    if (storedPatient && token) {
       setPatient(JSON.parse(storedPatient));
     } else {
-      navigate("/registration");
+      navigate("/login");
     }
+    
+    setIsLoading(false);
   }, [navigate]);
 
-  if (!patient) {
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+      toast({
+        title: "Logged out successfully",
+      });
+      navigate("/");
+    } catch (error) {
+      console.error("Logout error:", error);
+      toast({
+        title: "Logout failed",
+        description: "There was an issue logging out. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  if (isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="animate-pulse flex flex-col items-center">
           <Brain className="h-12 w-12 text-primary" />
           <p className="mt-2">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!patient) {
+    return (
+      <div className="flex justify-center items-center h-screen flex-col">
+        <div className="text-center mb-4">
+          <Brain className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Session Expired</h2>
+          <p className="text-gray-500 mb-4">Your session has expired or you are not logged in.</p>
+          <Button onClick={() => navigate("/login")}>Go to Login</Button>
         </div>
       </div>
     );
@@ -54,15 +92,39 @@ const Dashboard = () => {
       variants={container}
     >
       <motion.div variants={item} className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-primary">Stroke Sense</h1>
-        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-          <Button 
-            variant="outline" 
-            onClick={() => navigate("/profile")}
-          >
-            Patient Profile
-          </Button>
-        </motion.div>
+        <div className="flex items-center">
+          <Brain className="h-8 w-8 text-primary mr-2" />
+          <h1 className="text-2xl font-bold text-primary">Stroke Sense</h1>
+        </div>
+        <div className="flex items-center space-x-3">
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button 
+              variant="outline" 
+              onClick={() => navigate("/profile")}
+            >
+              Patient Profile
+            </Button>
+          </motion.div>
+          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <Button 
+              variant="ghost" 
+              onClick={handleLogout}
+              className="text-gray-600 hover:text-red-600"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
+          </motion.div>
+        </div>
+      </motion.div>
+
+      <motion.div variants={item} className="mb-6">
+        <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
+          <CardContent className="pt-6">
+            <h2 className="text-xl font-semibold mb-2">Welcome back, {patient.firstName}!</h2>
+            <p className="text-gray-600">Your regular assessment helps us monitor your health more effectively.</p>
+          </CardContent>
+        </Card>
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
