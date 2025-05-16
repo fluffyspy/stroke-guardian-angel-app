@@ -121,7 +121,7 @@ const Dashboard = () => {
       <motion.div variants={item} className="mb-6">
         <Card className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200">
           <CardContent className="pt-6">
-            <h2 className="text-xl font-semibold mb-2">Welcome back, {patient.name}!</h2>
+            <h2 className="text-xl font-semibold mb-2">Welcome back, {patient.firstName}!</h2>
             <p className="text-gray-600">Your regular assessment helps us monitor your health more effectively.</p>
           </CardContent>
         </Card>
