@@ -14,10 +14,15 @@ const config: CapacitorConfig = {
       saveToGallery: true,
       quality: 90
     },
+    Motion: {
+      accelSamplingPeriod: 100, // Milliseconds between acceleration readings
+      rotationSamplingPeriod: 100 // Milliseconds between rotation readings
+    },
     Permissions: {
       aliases: {
         camera: 'android.permission.CAMERA',
-        microphone: 'android.permission.RECORD_AUDIO'
+        microphone: 'android.permission.RECORD_AUDIO',
+        sensors: 'android.permission.BODY_SENSORS'
       }
     }
   }

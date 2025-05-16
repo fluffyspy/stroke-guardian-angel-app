@@ -24,6 +24,11 @@ export interface StrokeDetectionResult {
   result: 'normal' | 'abnormal' | 'inconclusive';
   timestamp: Date;
   details?: string;
+  sensorData?: {
+    accelerometer?: number[];
+    gyroscope?: number[];
+    abnormalReadingsPercentage?: number;
+  };
 }
 
 export interface CombinedAnalysisResult {
