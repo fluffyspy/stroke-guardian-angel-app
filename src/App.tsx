@@ -3,7 +3,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+import { App as CapacitorApp } from "@capacitor/app";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
@@ -26,12 +28,58 @@ const queryClient = new QueryClient({
   },
 });
 
+// Back button handler component
+const BackButtonHandler = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const handleBackButton = () => {
+      const testScreens = [
+        '/eye-tracking', 
+        '/balance-detection', 
+        '/speech-detection',
+        '/emergency',
+        '/comprehensive-analysis',
+        '/education'
+      ];
+      
+      // Check if we're on a test screen
+      const isTestScreen = testScreens.some(path => 
+        location.pathname === path || location.pathname.startsWith(`${path}/`)
+      );
+      
+      if (isTestScreen) {
+        navigate('/dashboard');
+        return true; // Prevents default back action
+      }
+      
+      // Let default behavior happen (might close the app)
+      return false;
+    };
+
+    // Add listener for back button
+    const backButtonSubscription = CapacitorApp.addListener(
+      'backButton', 
+      handleBackButton
+    );
+
+    // Clean up the listener when component unmounts
+    return () => {
+      backButtonSubscription.remove();
+    };
+  }, [navigate, location]);
+
+  return null; // This component doesn't render anything
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <BackButtonHandler /> {/* Add the back button handler */}
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
