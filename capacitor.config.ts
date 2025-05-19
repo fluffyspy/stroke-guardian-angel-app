@@ -16,7 +16,7 @@ const config: CapacitorConfig = {
     },
     Motion: {
       accelSamplingPeriod: 100, // Milliseconds between acceleration readings
-      rotationSamplingPeriod: 100 // Milliseconds between rotation readings
+      orientationSamplingPeriod: 100 // Milliseconds between orientation readings
     },
     Permissions: {
       aliases: {

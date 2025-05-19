@@ -7,17 +7,18 @@ import { Progress } from "@/components/ui/progress";
 import { Activity, AlertTriangle, CheckCircle } from "lucide-react";
 import { StrokeDetectionResult } from "@/types";
 import { Motion } from '@capacitor/motion';
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 
 // Threshold values for balance detection
 const ACCELERATION_THRESHOLD = 2.5; // m/s^2
 const ROTATION_THRESHOLD = 30; // degrees/s
+const TEST_DURATION = 5; // Changed to 5 seconds as per requirement
 
 const BalanceTest = () => {
   const navigate = useNavigate();
   const [testStarted, setTestStarted] = useState(false);
   const [testCompleted, setTestCompleted] = useState(false);
-  const [timer, setTimer] = useState(10); // Changed to 10 seconds
+  const [timer, setTimer] = useState(TEST_DURATION);
   const [result, setResult] = useState<StrokeDetectionResult | null>(null);
   const [accelerationData, setAccelerationData] = useState<number[]>([]);
   const [rotationData, setRotationData] = useState<number[]>([]);
@@ -27,11 +28,12 @@ const BalanceTest = () => {
   useEffect(() => {
     const checkSensors = async () => {
       try {
-        const { isAvailable } = await Motion.isAvailable();
-        setSensorAvailable(isAvailable);
-        
-        if (!isAvailable) {
-          toast.error("Motion sensors not available on this device");
+        // Instead of using isAvailable, we'll just attempt to add a listener temporarily
+        // to check if the sensors work
+        const tempListener = await Motion.addListener('accel', () => {});
+        if (tempListener) {
+          setSensorAvailable(true);
+          tempListener.remove();
         }
       } catch (error) {
         console.error("Error checking sensor availability:", error);
@@ -48,7 +50,7 @@ const BalanceTest = () => {
     if (!testStarted || !sensorAvailable) return;
     
     let accelListener: any = null;
-    let rotationListener: any = null;
+    let orientationListener: any = null;
     let abnormalReadingsCount = 0;
     let totalReadings = 0;
     
@@ -67,11 +69,15 @@ const BalanceTest = () => {
           }
         });
         
-        // Start gyroscope readings
-        rotationListener = await Motion.addListener('rotation', (event) => {
-          const { alpha, beta, gamma } = event.rotationRate;
-          // Calculate magnitude of rotation
-          const rotationMagnitude = Math.sqrt(alpha * alpha + beta * beta + gamma * gamma);
+        // Start orientation readings (instead of rotation which doesn't exist in Capacitor API)
+        orientationListener = await Motion.addListener('orientation', (event) => {
+          const { alpha, beta, gamma } = event;
+          // Calculate a measure of rotation from orientation values
+          const rotationMagnitude = Math.sqrt(
+            (alpha || 0) * (alpha || 0) + 
+            (beta || 0) * (beta || 0) + 
+            (gamma || 0) * (gamma || 0)
+          );
           setRotationData(prev => [...prev, rotationMagnitude]);
           
           if (rotationMagnitude > ROTATION_THRESHOLD) {
@@ -89,7 +95,7 @@ const BalanceTest = () => {
     return () => {
       // Clean up listeners when component unmounts or test ends
       if (accelListener) accelListener.remove();
-      if (rotationListener) rotationListener.remove();
+      if (orientationListener) orientationListener.remove();
     };
   }, [testStarted, sensorAvailable]);
 
@@ -100,12 +106,12 @@ const BalanceTest = () => {
     }
     
     setTestStarted(true);
-    setTimer(10);
+    setTimer(TEST_DURATION);
     setAccelerationData([]);
     setRotationData([]);
     
     // Instructions for user
-    toast.info("Hold the phone against your chest and walk normally for 10 seconds");
+    toast.info("Hold the phone against your chest and walk normally for 5 seconds");
     
     // Start the test timer
     const interval = setInterval(() => {
@@ -140,7 +146,12 @@ const BalanceTest = () => {
       detectionType: 'balance',
       result: balanceResult,
       timestamp: new Date(),
-      details: `Analyzed ${totalReadings} motion readings, ${abnormalPercentage.toFixed(1)}% showed balance irregularities.`
+      details: `Analyzed ${totalReadings} motion readings, ${abnormalPercentage.toFixed(1)}% showed balance irregularities.`,
+      sensorData: {
+        accelerometer: accelerationData,
+        gyroscope: rotationData,
+        abnormalReadingsPercentage: abnormalPercentage
+      }
     });
     
     // Stop motion sensors
@@ -150,7 +161,7 @@ const BalanceTest = () => {
   const resetTest = () => {
     setTestStarted(false);
     setTestCompleted(false);
-    setTimer(10);
+    setTimer(TEST_DURATION);
     setResult(null);
     setAccelerationData([]);
     setRotationData([]);
@@ -190,7 +201,7 @@ const BalanceTest = () => {
                 <ol className="list-decimal list-inside mt-1">
                   <li>Hold your phone against your chest with both hands</li>
                   <li>When ready, press "Start Test"</li>
-                  <li>Walk normally for 10 seconds</li>
+                  <li>Walk normally for 5 seconds</li>
                   <li>Stay in place when the timer ends</li>
                   <li>The app will analyze your walking balance</li>
                 </ol>
@@ -274,7 +285,7 @@ const BalanceTest = () => {
                     <span>Time remaining:</span>
                     <span>{timer} seconds</span>
                   </div>
-                  <Progress value={((10 - timer) / 10) * 100} />
+                  <Progress value={((TEST_DURATION - timer) / TEST_DURATION) * 100} />
                 </div>
               )}
             </div>
