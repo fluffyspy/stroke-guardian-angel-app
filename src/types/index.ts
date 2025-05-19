@@ -27,7 +27,13 @@ export interface StrokeDetectionResult {
   sensorData?: {
     accelerometer?: number[];
     gyroscope?: number[];
+    magnetometer?: number[];
     abnormalReadingsPercentage?: number;
+    variability?: {
+      acceleration?: number;
+      rotation?: number;
+      magnetic?: number;
+    };
   };
 }
 

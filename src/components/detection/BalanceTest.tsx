@@ -4,15 +4,15 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Activity, AlertTriangle, CheckCircle } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle, Smartphone } from "lucide-react";
 import { StrokeDetectionResult } from "@/types";
 import { Motion } from '@capacitor/motion';
 import { toast } from "sonner";
 
-// Threshold values for balance detection
+// Updated threshold values and test duration
 const ACCELERATION_THRESHOLD = 2.5; // m/s^2
 const ROTATION_THRESHOLD = 30; // degrees/s
-const TEST_DURATION = 5; // Changed to 5 seconds as per requirement
+const TEST_DURATION = 15; // Changed to 15 seconds as per requirement
 
 const BalanceTest = () => {
   const navigate = useNavigate();
@@ -22,7 +22,9 @@ const BalanceTest = () => {
   const [result, setResult] = useState<StrokeDetectionResult | null>(null);
   const [accelerationData, setAccelerationData] = useState<number[]>([]);
   const [rotationData, setRotationData] = useState<number[]>([]);
+  const [magnetometerData, setMagnetometerData] = useState<number[]>([]);
   const [sensorAvailable, setSensorAvailable] = useState(true);
+  const [instructionsRead, setInstructionsRead] = useState(false);
 
   // Check for sensor availability
   useEffect(() => {
@@ -83,6 +85,9 @@ const BalanceTest = () => {
           if (rotationMagnitude > ROTATION_THRESHOLD) {
             abnormalReadingsCount++;
           }
+          
+          // Store magnetometer-like data (orientation can help approximate this)
+          setMagnetometerData(prev => [...prev, alpha || 0]);
         });
       } catch (error) {
         console.error("Error starting sensors:", error);
@@ -109,9 +114,10 @@ const BalanceTest = () => {
     setTimer(TEST_DURATION);
     setAccelerationData([]);
     setRotationData([]);
+    setMagnetometerData([]);
     
     // Instructions for user
-    toast.info("Hold the phone against your chest and walk normally for 5 seconds");
+    toast.info("Hold the phone against the center of your chest and walk normally for 15 seconds");
     
     // Start the test timer
     const interval = setInterval(() => {
@@ -138,15 +144,46 @@ const BalanceTest = () => {
     const abnormalReadings = abnormalAccelCount + abnormalRotationCount;
     const abnormalPercentage = totalReadings > 0 ? (abnormalReadings / totalReadings) * 100 : 0;
     
+    // Calculate variability in readings (standard deviation)
+    const accelVariability = calculateStandardDeviation(accelerationData);
+    const rotationVariability = calculateStandardDeviation(rotationData);
+    const magnetoVariability = calculateStandardDeviation(magnetometerData);
+    
     // Determine result based on threshold (e.g., 20% abnormal readings indicates balance issues)
-    const balanceResult = abnormalPercentage > 20 ? 'abnormal' : 'normal';
+    const balanceResult = abnormalPercentage > 20 || 
+                        accelVariability > 1.5 || 
+                        rotationVariability > 15 ? 'abnormal' : 'normal';
+    
+    // Create detailed explanation
+    let detailedExplanation = `Analyzed ${totalReadings} motion readings over 15 seconds.\n`;
+    
+    if (balanceResult === 'abnormal') {
+      detailedExplanation += `${abnormalPercentage.toFixed(1)}% of readings showed balance irregularities.\n`;
+      
+      if (abnormalAccelCount > 0) {
+        detailedExplanation += `Detected ${abnormalAccelCount} instances of abnormal acceleration (above ${ACCELERATION_THRESHOLD} m/s²).\n`;
+      }
+      
+      if (abnormalRotationCount > 0) {
+        detailedExplanation += `Detected ${abnormalRotationCount} instances of abnormal rotation (above ${ROTATION_THRESHOLD}°/s).\n`;
+      }
+      
+      detailedExplanation += `Movement variability: Acceleration (${accelVariability.toFixed(2)} m/s²), `;
+      detailedExplanation += `Rotation (${rotationVariability.toFixed(2)}°/s).\n`;
+      detailedExplanation += `These patterns may indicate balance issues consistent with potential stroke symptoms.`;
+    } else {
+      detailedExplanation += `Movement patterns appear stable and within normal range.\n`;
+      detailedExplanation += `Movement variability: Acceleration (${accelVariability.toFixed(2)} m/s²), `;
+      detailedExplanation += `Rotation (${rotationVariability.toFixed(2)}°/s).\n`;
+      detailedExplanation += `No significant balance irregularities detected.`;
+    }
     
     // Set the test result
     setResult({
       detectionType: 'balance',
       result: balanceResult,
       timestamp: new Date(),
-      details: `Analyzed ${totalReadings} motion readings, ${abnormalPercentage.toFixed(1)}% showed balance irregularities.`,
+      details: detailedExplanation,
       sensorData: {
         accelerometer: accelerationData,
         gyroscope: rotationData,
@@ -157,6 +194,17 @@ const BalanceTest = () => {
     // Stop motion sensors
     Motion.removeAllListeners();
   };
+  
+  // Calculate standard deviation as a measure of variability
+  const calculateStandardDeviation = (values: number[]): number => {
+    if (values.length === 0) return 0;
+    
+    const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+    const squareDiffs = values.map(val => (val - mean) ** 2);
+    const variance = squareDiffs.reduce((sum, val) => sum + val, 0) / squareDiffs.length;
+    
+    return Math.sqrt(variance);
+  };
 
   const resetTest = () => {
     setTestStarted(false);
@@ -165,6 +213,8 @@ const BalanceTest = () => {
     setResult(null);
     setAccelerationData([]);
     setRotationData([]);
+    setMagnetometerData([]);
+    setInstructionsRead(false);
   };
 
   return (
@@ -190,34 +240,52 @@ const BalanceTest = () => {
               <h2 className="text-xl font-semibold mb-2">Balance Test</h2>
               <p className="mb-4 text-gray-600">
                 This test uses your phone's motion sensors to check for balance issues. Please ensure:
-                <ul className="text-left list-disc list-inside mt-2">
-                  <li>You are in a safe environment with nothing to trip over</li>
-                  <li>Someone is nearby to assist if needed</li>
-                  <li>You have space to walk comfortably</li>
-                </ul>
               </p>
+              <ul className="text-left list-disc mb-4 ml-6">
+                <li>You are in a safe environment with nothing to trip over</li>
+                <li>Someone is nearby to assist if needed</li>
+                <li>You have space to walk comfortably</li>
+              </ul>
               <div className="mt-4 bg-blue-50 p-4 rounded-lg text-blue-700 text-left">
                 <p className="font-medium">Instructions:</p>
-                <ol className="list-decimal list-inside mt-1">
-                  <li>Hold your phone against your chest with both hands</li>
-                  <li>When ready, press "Start Test"</li>
-                  <li>Walk normally for 5 seconds</li>
-                  <li>Stay in place when the timer ends</li>
-                  <li>The app will analyze your walking balance</li>
+                <ol className="list-decimal ml-6 mt-2">
+                  <li>Hold your phone firmly against the <strong>center of your chest</strong></li>
+                  <li className="mt-1">Keep both hands on the sides of the phone</li>
+                  <li className="mt-1">When ready, press "Start Test"</li>
+                  <li className="mt-1">Walk normally for 15 seconds</li>
+                  <li className="mt-1">Stay in place when the timer ends</li>
+                  <li className="mt-1">The app will analyze your walking balance</li>
                 </ol>
               </div>
-              <Button 
-                onClick={startTest} 
-                className="mt-6" 
-                disabled={!sensorAvailable}
-              >
-                Start Test
-              </Button>
-              {!sensorAvailable && (
-                <p className="mt-2 text-red-500">
-                  Motion sensors not available on this device. This test requires accelerometer and gyroscope.
-                </p>
-              )}
+              <div className="mt-4">
+                <div className="flex items-center justify-center mb-4">
+                  <Smartphone className="h-16 w-16 text-primary mr-2" />
+                  <div className="w-20 h-16 border-2 border-primary rounded-full flex items-center justify-center">
+                    <span className="text-primary font-medium">CHEST</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col items-center">
+                <Button 
+                  onClick={() => setInstructionsRead(true)}
+                  className="mt-4 mb-2"
+                  disabled={instructionsRead}
+                >
+                  {instructionsRead ? "Instructions Read ✓" : "I've Read The Instructions"}
+                </Button>
+                <Button 
+                  onClick={startTest} 
+                  className="mt-2" 
+                  disabled={!sensorAvailable || !instructionsRead}
+                >
+                  Start Test
+                </Button>
+                {!sensorAvailable && (
+                  <p className="mt-2 text-red-500">
+                    Motion sensors not available on this device. This test requires accelerometer and gyroscope.
+                  </p>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-6">
@@ -225,7 +293,7 @@ const BalanceTest = () => {
                 {!testCompleted ? (
                   <div className="text-center">
                     <div className="text-4xl font-bold mb-2">{timer}</div>
-                    <p className="text-gray-600">Hold phone against chest and walk normally</p>
+                    <p className="text-gray-600">Hold phone against center of chest and walk normally</p>
                     
                     {/* Visual indicators for motion detection */}
                     <div className="mt-4 flex justify-center space-x-4">
@@ -258,7 +326,11 @@ const BalanceTest = () => {
                           <h3 className="text-xl font-bold mb-2">Balance Test Passed</h3>
                           <p>Your balance appears normal.</p>
                           {result?.details && (
-                            <p className="mt-2 text-sm text-gray-500">{result.details}</p>
+                            <div className="mt-2 text-sm text-left overflow-y-auto max-h-36">
+                              {result.details.split('\n').map((line, index) => (
+                                <p key={index} className="mb-1">{line}</p>
+                              ))}
+                            </div>
                           )}
                         </div>
                       ) : (
@@ -267,7 +339,11 @@ const BalanceTest = () => {
                           <h3 className="text-xl font-bold mb-2">Balance Concerns Detected</h3>
                           <p>The test indicates potential balance issues.</p>
                           {result?.details && (
-                            <p className="mt-2 text-sm text-gray-500">{result.details}</p>
+                            <div className="mt-2 text-sm text-left overflow-y-auto max-h-36">
+                              {result.details.split('\n').map((line, index) => (
+                                <p key={index} className="mb-1">{line}</p>
+                              ))}
+                            </div>
                           )}
                           <p className="mt-4 text-red-500 font-medium">
                             Please consider seeking medical attention.
