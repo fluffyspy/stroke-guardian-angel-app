@@ -59,42 +59,62 @@ const BackButtonHandler = () => {
     };
 
     // Add listener for back button
-    const backButtonSubscription = CapacitorApp.addListener(
-      'backButton', 
-      handleBackButton
-    );
+    let backButtonListener: any;
+    
+    const setupListener = async () => {
+      try {
+        backButtonListener = await CapacitorApp.addListener(
+          'backButton', 
+          handleBackButton
+        );
+      } catch (error) {
+        console.error("Error setting up back button listener:", error);
+      }
+    };
+    
+    setupListener();
 
     // Clean up the listener when component unmounts
     return () => {
-      backButtonSubscription.remove();
+      if (backButtonListener) {
+        backButtonListener.remove();
+      }
     };
   }, [navigate, location]);
 
   return null; // This component doesn't render anything
 };
 
+const AppContent = () => {
+  return (
+    <>
+      <Toaster />
+      <Sonner />
+      <BackButtonHandler />
+      <Routes>
+        <Route path="/" element={<Index />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/registration" element={<PatientRegistration />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/profile" element={<PatientProfile />} />
+        <Route path="/eye-tracking" element={<EyeTrackingTest />} />
+        <Route path="/balance-detection" element={<BalanceTest />} />
+        <Route path="/speech-detection" element={<SpeechTest />} />
+        <Route path="/emergency" element={<Emergency />} />
+        <Route path="/comprehensive-analysis" element={<ComprehensiveAnalysis />} />
+        <Route path="/education/:topic" element={<StrokeEducation />} />
+        <Route path="/education" element={<StrokeEducation />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </>
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
       <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BackButtonHandler /> {/* Add the back button handler */}
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/registration" element={<PatientRegistration />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/profile" element={<PatientProfile />} />
-          <Route path="/eye-tracking" element={<EyeTrackingTest />} />
-          <Route path="/balance-detection" element={<BalanceTest />} />
-          <Route path="/speech-detection" element={<SpeechTest />} />
-          <Route path="/emergency" element={<Emergency />} />
-          <Route path="/comprehensive-analysis" element={<ComprehensiveAnalysis />} />
-          <Route path="/education/:topic" element={<StrokeEducation />} />
-          <Route path="/education" element={<StrokeEducation />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AppContent />
       </TooltipProvider>
     </BrowserRouter>
   </QueryClientProvider>
