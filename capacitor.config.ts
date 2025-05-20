@@ -6,7 +6,8 @@ const config: CapacitorConfig = {
   appName: 'stroke-sense',
   webDir: 'dist',
   server: {
-    url: 'https://92cc6c6e-2fd6-4266-a5df-fe7dc56c7f3a.lovableproject.com?forceHideBadge=true',
+    androidScheme: 'https',
+    url: 'https://92cc6c6e-2fd6-4266-a5df-fe7dc56c7f3a.lovableproject.com',
     cleartext: true
   },
   plugins: {
@@ -15,8 +16,8 @@ const config: CapacitorConfig = {
       quality: 90
     },
     Motion: {
-      accelSamplingPeriod: 50, // Increased sampling rate (milliseconds between readings)
-      orientationSamplingPeriod: 50 // Increased sampling rate for orientation
+      accelSamplingPeriod: 50,
+      orientationSamplingPeriod: 50
     },
     Permissions: {
       aliases: {
