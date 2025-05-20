@@ -1,18 +1,34 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Activity, AlertTriangle, CheckCircle, Smartphone } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle, Smartphone, Download } from "lucide-react";
 import { StrokeDetectionResult } from "@/types";
 import { Motion } from '@capacitor/motion';
 import { toast } from "sonner";
 
-// Updated threshold values and test duration
-const ACCELERATION_THRESHOLD = 2.5; // m/s^2
-const ROTATION_THRESHOLD = 30; // degrees/s
-const TEST_DURATION = 15; // Changed to 15 seconds as per requirement
+// More sensitive threshold values for better detection
+const ACCELERATION_THRESHOLD = 1.2; // Reduced from 2.5 for better sensitivity (m/s²)
+const ROTATION_THRESHOLD = 15; // Reduced from 30 for better sensitivity (degrees/s)
+const TEST_DURATION = 15; // 15 seconds test duration
+
+interface SensorReading {
+  timestamp: number;
+  acceleration: {
+    x: number;
+    y: number;
+    z: number;
+    magnitude: number;
+  };
+  orientation: {
+    alpha: number | null;
+    beta: number | null;
+    gamma: number | null;
+    magnitude: number;
+  };
+}
 
 const BalanceTest = () => {
   const navigate = useNavigate();
@@ -25,13 +41,20 @@ const BalanceTest = () => {
   const [magnetometerData, setMagnetometerData] = useState<number[]>([]);
   const [sensorAvailable, setSensorAvailable] = useState(true);
   const [instructionsRead, setInstructionsRead] = useState(false);
+  const [rawSensorData, setRawSensorData] = useState<SensorReading[]>([]);
+  const [currentAccel, setCurrentAccel] = useState({ x: 0, y: 0, z: 0 });
+  const [currentOrientation, setCurrentOrientation] = useState({ alpha: 0, beta: 0, gamma: 0 });
+  const [showSensorReadings, setShowSensorReadings] = useState(false);
+  
+  // Refs for cleaning up listeners
+  const accelListenerRef = useRef<any>(null);
+  const orientationListenerRef = useRef<any>(null);
 
   // Check for sensor availability
   useEffect(() => {
     const checkSensors = async () => {
       try {
-        // Instead of using isAvailable, we'll just attempt to add a listener temporarily
-        // to check if the sensors work
+        // Test if we can access the accelerometer
         const tempListener = await Motion.addListener('accel', () => {});
         if (tempListener) {
           setSensorAvailable(true);
@@ -51,43 +74,79 @@ const BalanceTest = () => {
   useEffect(() => {
     if (!testStarted || !sensorAvailable) return;
     
-    let accelListener: any = null;
-    let orientationListener: any = null;
     let abnormalReadingsCount = 0;
     let totalReadings = 0;
+    const newRawData: SensorReading[] = [];
     
     const startSensors = async () => {
       try {
         // Start accelerometer readings
-        accelListener = await Motion.addListener('accel', (event) => {
+        accelListenerRef.current = await Motion.addListener('accel', (event) => {
           const { x, y, z } = event.acceleration;
+          
+          // Set current values for display
+          setCurrentAccel({ x, y, z });
+          
           // Calculate magnitude of acceleration vector
           const magnitude = Math.sqrt(x * x + y * y + z * z);
           setAccelerationData(prev => [...prev, magnitude]);
           
+          // Store raw data
+          newRawData.push({
+            timestamp: Date.now(),
+            acceleration: { x, y, z, magnitude },
+            orientation: { ...currentOrientation, magnitude: 0 } // Will be updated by orientation listener
+          });
+          
+          // Count abnormal readings
           totalReadings++;
           if (magnitude > ACCELERATION_THRESHOLD) {
             abnormalReadingsCount++;
           }
+          
+          // Update raw sensor data state
+          setRawSensorData(prev => [...prev, newRawData[newRawData.length - 1]]);
+          
+          // Debug log
+          console.log(`Acceleration: x=${x.toFixed(2)}, y=${y.toFixed(2)}, z=${z.toFixed(2)}, mag=${magnitude.toFixed(2)}`);
         });
         
-        // Start orientation readings (instead of rotation which doesn't exist in Capacitor API)
-        orientationListener = await Motion.addListener('orientation', (event) => {
+        // Start orientation readings
+        orientationListenerRef.current = await Motion.addListener('orientation', (event) => {
           const { alpha, beta, gamma } = event;
+          
+          // Set current values for display
+          setCurrentOrientation({ alpha: alpha || 0, beta: beta || 0, gamma: gamma || 0 });
+          
           // Calculate a measure of rotation from orientation values
           const rotationMagnitude = Math.sqrt(
             (alpha || 0) * (alpha || 0) + 
             (beta || 0) * (beta || 0) + 
             (gamma || 0) * (gamma || 0)
           );
+          
           setRotationData(prev => [...prev, rotationMagnitude]);
+          
+          // Add orientation data to the latest reading
+          if (newRawData.length > 0) {
+            const lastIndex = newRawData.length - 1;
+            newRawData[lastIndex].orientation = {
+              alpha, 
+              beta, 
+              gamma,
+              magnitude: rotationMagnitude
+            };
+          }
           
           if (rotationMagnitude > ROTATION_THRESHOLD) {
             abnormalReadingsCount++;
           }
           
-          // Store magnetometer-like data (orientation can help approximate this)
+          // Store magnetometer-like data
           setMagnetometerData(prev => [...prev, alpha || 0]);
+          
+          // Debug log
+          console.log(`Orientation: α=${alpha?.toFixed(2) || 'null'}, β=${beta?.toFixed(2) || 'null'}, γ=${gamma?.toFixed(2) || 'null'}, mag=${rotationMagnitude.toFixed(2)}`);
         });
       } catch (error) {
         console.error("Error starting sensors:", error);
@@ -99,8 +158,14 @@ const BalanceTest = () => {
     
     return () => {
       // Clean up listeners when component unmounts or test ends
-      if (accelListener) accelListener.remove();
-      if (orientationListener) orientationListener.remove();
+      if (accelListenerRef.current) {
+        accelListenerRef.current.remove();
+        accelListenerRef.current = null;
+      }
+      if (orientationListenerRef.current) {
+        orientationListenerRef.current.remove();
+        orientationListenerRef.current = null;
+      }
     };
   }, [testStarted, sensorAvailable]);
 
@@ -115,6 +180,7 @@ const BalanceTest = () => {
     setAccelerationData([]);
     setRotationData([]);
     setMagnetometerData([]);
+    setRawSensorData([]);
     
     // Instructions for user
     toast.info("Hold the phone against the center of your chest and walk normally for 15 seconds");
@@ -135,6 +201,16 @@ const BalanceTest = () => {
   const completeTest = () => {
     setTestCompleted(true);
     
+    // Stop motion sensors
+    if (accelListenerRef.current) {
+      accelListenerRef.current.remove();
+      accelListenerRef.current = null;
+    }
+    if (orientationListenerRef.current) {
+      orientationListenerRef.current.remove();
+      orientationListenerRef.current = null;
+    }
+    
     // Analyze the collected data
     const abnormalAccelCount = accelerationData.filter(value => value > ACCELERATION_THRESHOLD).length;
     const abnormalRotationCount = rotationData.filter(value => value > ROTATION_THRESHOLD).length;
@@ -149,10 +225,10 @@ const BalanceTest = () => {
     const rotationVariability = calculateStandardDeviation(rotationData);
     const magnetoVariability = calculateStandardDeviation(magnetometerData);
     
-    // Determine result based on threshold (e.g., 20% abnormal readings indicates balance issues)
-    const balanceResult = abnormalPercentage > 20 || 
-                        accelVariability > 1.5 || 
-                        rotationVariability > 15 ? 'abnormal' : 'normal';
+    // Determine result based on threshold (lowered to 15% for better sensitivity)
+    const balanceResult = abnormalPercentage > 15 || 
+                        accelVariability > 1.0 || 
+                        rotationVariability > 10 ? 'abnormal' : 'normal';
     
     // Create detailed explanation
     let detailedExplanation = `Analyzed ${totalReadings} motion readings over 15 seconds.\n`;
@@ -187,12 +263,15 @@ const BalanceTest = () => {
       sensorData: {
         accelerometer: accelerationData,
         gyroscope: rotationData,
-        abnormalReadingsPercentage: abnormalPercentage
+        magnetometer: magnetometerData,
+        abnormalReadingsPercentage: abnormalPercentage,
+        variability: {
+          acceleration: accelVariability,
+          rotation: rotationVariability,
+          magnetic: magnetoVariability
+        }
       }
     });
-    
-    // Stop motion sensors
-    Motion.removeAllListeners();
   };
   
   // Calculate standard deviation as a measure of variability
@@ -214,7 +293,47 @@ const BalanceTest = () => {
     setAccelerationData([]);
     setRotationData([]);
     setMagnetometerData([]);
+    setRawSensorData([]);
     setInstructionsRead(false);
+    setShowSensorReadings(false);
+  };
+
+  // Create a CSV file from sensor data and trigger download
+  const downloadSensorData = () => {
+    if (rawSensorData.length === 0) {
+      toast.error("No sensor data available to download");
+      return;
+    }
+    
+    // Create CSV header
+    let csv = "timestamp,accel_x,accel_y,accel_z,accel_magnitude,orientation_alpha,orientation_beta,orientation_gamma,orientation_magnitude\n";
+    
+    // Add data rows
+    rawSensorData.forEach(reading => {
+      csv += [
+        reading.timestamp,
+        reading.acceleration.x,
+        reading.acceleration.y,
+        reading.acceleration.z,
+        reading.acceleration.magnitude,
+        reading.orientation.alpha || 0,
+        reading.orientation.beta || 0,
+        reading.orientation.gamma || 0,
+        reading.orientation.magnitude
+      ].join(",") + "\n";
+    });
+    
+    // Create blob and download
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `balance-test-data-${new Date().toISOString()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success("Sensor data downloaded as CSV");
   };
 
   return (
@@ -253,6 +372,7 @@ const BalanceTest = () => {
                   <li className="mt-1">Keep both hands on the sides of the phone</li>
                   <li className="mt-1">When ready, press "Start Test"</li>
                   <li className="mt-1">Walk normally for 15 seconds</li>
+                  <li className="mt-1">Try to move in different ways to test balance detection</li>
                   <li className="mt-1">Stay in place when the timer ends</li>
                   <li className="mt-1">The app will analyze your walking balance</li>
                 </ol>
@@ -295,6 +415,29 @@ const BalanceTest = () => {
                     <div className="text-4xl font-bold mb-2">{timer}</div>
                     <p className="text-gray-600">Hold phone against center of chest and walk normally</p>
                     
+                    {/* Live sensor readings display */}
+                    <div className="mt-6 bg-gray-50 p-3 rounded-lg w-full max-w-md mx-auto">
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Live Sensor Readings</h3>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-white p-2 rounded shadow-sm">
+                          <div className="font-medium">Acceleration</div>
+                          <div className="grid grid-cols-3 gap-1 mt-1">
+                            <div>X: {currentAccel.x.toFixed(2)}</div>
+                            <div>Y: {currentAccel.y.toFixed(2)}</div>
+                            <div>Z: {currentAccel.z.toFixed(2)}</div>
+                          </div>
+                        </div>
+                        <div className="bg-white p-2 rounded shadow-sm">
+                          <div className="font-medium">Orientation</div>
+                          <div className="grid grid-cols-3 gap-1 mt-1">
+                            <div>α: {currentOrientation.alpha.toFixed(2)}</div>
+                            <div>β: {currentOrientation.beta.toFixed(2)}</div>
+                            <div>γ: {currentOrientation.gamma.toFixed(2)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
                     {/* Visual indicators for motion detection */}
                     <div className="mt-4 flex justify-center space-x-4">
                       <div className="text-center">
@@ -319,7 +462,7 @@ const BalanceTest = () => {
                   </div>
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
-                    <div className="text-center p-6 bg-background rounded-lg shadow-lg text-foreground">
+                    <div className="text-center p-6 bg-background rounded-lg shadow-lg text-foreground max-w-md w-full">
                       {result?.result === 'normal' ? (
                         <div>
                           <CheckCircle className="h-16 w-16 mx-auto mb-4 text-green-500" />
@@ -350,6 +493,42 @@ const BalanceTest = () => {
                           </p>
                         </div>
                       )}
+                      
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <Button 
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center" 
+                          onClick={() => setShowSensorReadings(!showSensorReadings)}
+                        >
+                          {showSensorReadings ? "Hide Raw Sensor Data" : "Show Raw Sensor Data"}
+                        </Button>
+                        
+                        {showSensorReadings && (
+                          <div className="mt-2 bg-gray-50 p-2 rounded text-xs overflow-y-auto max-h-40 text-left">
+                            <h4 className="font-medium mb-1">Sample of collected data:</h4>
+                            <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                              {rawSensorData.slice(-10).map((reading, idx) => (
+                                <div key={idx} className="bg-white p-1 rounded">
+                                  <div>Accel: {reading.acceleration.magnitude.toFixed(2)} m/s²</div>
+                                  <div>Rotation: {reading.orientation.magnitude.toFixed(2)}°</div>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="mt-2">
+                              <Button 
+                                size="sm"
+                                variant="secondary" 
+                                className="w-full flex items-center justify-center"
+                                onClick={downloadSensorData}
+                              >
+                                <Download className="h-3 w-3 mr-1" />
+                                Download Complete Data (CSV)
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}

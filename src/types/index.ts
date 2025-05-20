@@ -34,6 +34,11 @@ export interface StrokeDetectionResult {
       rotation?: number;
       magnetic?: number;
     };
+    rawData?: Array<{
+      timestamp: number;
+      acceleration: { x: number; y: number; z: number; magnitude: number };
+      orientation: { alpha: number | null; beta: number | null; gamma: number | null; magnitude: number };
+    }>;
   };
 }
 
