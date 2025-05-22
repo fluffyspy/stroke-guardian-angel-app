@@ -7,8 +7,9 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https',
-    url: 'https://92cc6c6e-2fd6-4266-a5df-fe7dc56c7f3a.lovableproject.com',
-    cleartext: true
+    // Using 'localhost' to ensure the app works offline, not relying on remote URL
+    cleartext: true,
+    hostname: 'localhost',
   },
   plugins: {
     Camera: {

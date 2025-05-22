@@ -1,4 +1,3 @@
-
 export interface Patient {
   id?: string;
   name: string;
@@ -39,6 +38,8 @@ export interface StrokeDetectionResult {
       acceleration: { x: number; y: number; z: number; magnitude: number };
       orientation: { alpha: number | null; beta: number | null; gamma: number | null; magnitude: number };
     }>;
+    // Add connectionStatus to track if device sensors are connected properly
+    connectionStatus?: 'connected' | 'disconnected' | 'error';
   };
 }
 
@@ -50,4 +51,17 @@ export interface CombinedAnalysisResult {
   riskLevel: 'low' | 'moderate' | 'high';
   timestamp: Date;
   recommendations: string[];
+}
+
+// Add a new interface to track app status
+export interface AppStatus {
+  online: boolean;
+  sensorsAvailable: boolean;
+  lastSync: Date | null;
+  version: string;
+  errorLogs: Array<{
+    timestamp: Date;
+    message: string;
+    code?: string;
+  }>;
 }
