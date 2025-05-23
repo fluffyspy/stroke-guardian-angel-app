@@ -7,7 +7,7 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https',
-    // Using 'localhost' to ensure the app works offline, not relying on remote URL
+    // Configured to run completely offline without any remote URLs
     cleartext: true,
     hostname: 'localhost',
   },
