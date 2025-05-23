@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,10 +8,11 @@ import { StrokeDetectionResult } from "@/types";
 import { Motion } from '@capacitor/motion';
 import { toast } from "sonner";
 
-// Much more sensitive threshold values for better detection
-const ACCELERATION_THRESHOLD = 0.8; // Reduced from 1.2 for higher sensitivity (m/s²)
-const ROTATION_THRESHOLD = 10; // Reduced from 15 for higher sensitivity (degrees/s)
-const ABNORMAL_PERCENTAGE_THRESHOLD = 10; // Lower threshold to flag as abnormal (%)
+// Even more sensitive threshold values for better detection
+const ACCELERATION_THRESHOLD = 0.5; // Further reduced for higher sensitivity (m/s²)
+const ROTATION_THRESHOLD = 5; // Further reduced for higher sensitivity (degrees/s)
+const ABNORMAL_PERCENTAGE_THRESHOLD = 5; // Lower threshold to flag as abnormal (%)
+const MIN_READINGS_REQUIRED = 10; // Minimum number of readings required for valid test
 const TEST_DURATION = 15; // 15 seconds test duration
 
 interface SensorReading {
@@ -47,9 +47,18 @@ const BalanceTest = () => {
   const [currentOrientation, setCurrentOrientation] = useState({ alpha: 0, beta: 0, gamma: 0 });
   const [showSensorReadings, setShowSensorReadings] = useState(false);
   
+  // Debug state to monitor readings
+  const [debugInfo, setDebugInfo] = useState({
+    totalReadings: 0,
+    abnormalCount: 0,
+    lastUpdate: Date.now()
+  });
+  
   // Refs for cleaning up listeners
   const accelListenerRef = useRef<any>(null);
   const orientationListenerRef = useRef<any>(null);
+  const readingsCountRef = useRef<number>(0);
+  const abnormalReadingsCountRef = useRef<number>(0);
 
   // Check for sensor availability
   useEffect(() => {
@@ -75,12 +84,15 @@ const BalanceTest = () => {
   useEffect(() => {
     if (!testStarted || !sensorAvailable) return;
     
-    let abnormalReadingsCount = 0;
-    let totalReadings = 0;
+    // Reset counters
+    readingsCountRef.current = 0;
+    abnormalReadingsCountRef.current = 0;
     const newRawData: SensorReading[] = [];
     
     const startSensors = async () => {
       try {
+        console.log("Starting sensors for balance test");
+        
         // Start accelerometer readings
         accelListenerRef.current = await Motion.addListener('accel', (event) => {
           const { x, y, z } = event.acceleration;
@@ -92,6 +104,9 @@ const BalanceTest = () => {
           const magnitude = Math.sqrt(x * x + y * y + z * z);
           setAccelerationData(prev => [...prev, magnitude]);
           
+          // Increment total readings counter
+          readingsCountRef.current += 1;
+          
           // Store raw data
           newRawData.push({
             timestamp: Date.now(),
@@ -100,17 +115,23 @@ const BalanceTest = () => {
           });
           
           // Count abnormal readings - increased sensitivity
-          totalReadings++;
           if (magnitude > ACCELERATION_THRESHOLD) {
             // Increment with higher weight for more significant movements
-            abnormalReadingsCount += (magnitude > ACCELERATION_THRESHOLD * 1.5) ? 2 : 1;
+            abnormalReadingsCountRef.current += (magnitude > ACCELERATION_THRESHOLD * 1.5) ? 2 : 1;
           }
           
           // Update raw sensor data state
           setRawSensorData(prev => [...prev, newRawData[newRawData.length - 1]]);
           
+          // Update debug info
+          setDebugInfo(prev => ({
+            totalReadings: readingsCountRef.current,
+            abnormalCount: abnormalReadingsCountRef.current,
+            lastUpdate: Date.now()
+          }));
+          
           // Debug log
-          console.log(`Acceleration: x=${x.toFixed(2)}, y=${y.toFixed(2)}, z=${z.toFixed(2)}, mag=${magnitude.toFixed(2)}`);
+          console.log(`Acceleration: x=${x.toFixed(2)}, y=${y.toFixed(2)}, z=${z.toFixed(2)}, mag=${magnitude.toFixed(2)}, total=${readingsCountRef.current}, abnormal=${abnormalReadingsCountRef.current}`);
         });
         
         // Start orientation readings
@@ -143,15 +164,24 @@ const BalanceTest = () => {
           // Increased sensitivity for rotation detection
           if (rotationMagnitude > ROTATION_THRESHOLD) {
             // Weight higher rotations more in the abnormal count
-            abnormalReadingsCount += (rotationMagnitude > ROTATION_THRESHOLD * 1.5) ? 2 : 1;
+            abnormalReadingsCountRef.current += (rotationMagnitude > ROTATION_THRESHOLD * 1.5) ? 2 : 1;
           }
           
           // Store magnetometer-like data
           setMagnetometerData(prev => [...prev, alpha || 0]);
           
+          // Update debug info
+          setDebugInfo(prev => ({
+            totalReadings: readingsCountRef.current,
+            abnormalCount: abnormalReadingsCountRef.current,
+            lastUpdate: Date.now()
+          }));
+          
           // Debug log
           console.log(`Orientation: α=${alpha?.toFixed(2) || 'null'}, β=${beta?.toFixed(2) || 'null'}, γ=${gamma?.toFixed(2) || 'null'}, mag=${rotationMagnitude.toFixed(2)}`);
         });
+        
+        console.log("Sensor listeners attached successfully");
       } catch (error) {
         console.error("Error starting sensors:", error);
         toast.error("Failed to start motion sensors");
@@ -185,6 +215,8 @@ const BalanceTest = () => {
     setRotationData([]);
     setMagnetometerData([]);
     setRawSensorData([]);
+    setInstructionsRead(false);
+    setShowSensorReadings(false);
     
     // Instructions for user
     toast.info("Hold the phone against the center of your chest and walk normally for 15 seconds");
@@ -215,27 +247,63 @@ const BalanceTest = () => {
       orientationListenerRef.current = null;
     }
     
+    // Ensure we have at least some readings
+    const totalReadings = readingsCountRef.current;
+    console.log(`Test completed with ${totalReadings} total readings`);
+    
+    if (totalReadings < MIN_READINGS_REQUIRED) {
+      toast.error("Not enough movement data collected. Please try again.");
+      setResult({
+        detectionType: 'balance',
+        result: 'inconclusive',
+        timestamp: new Date(),
+        details: `Insufficient data: Only ${totalReadings} readings collected, minimum ${MIN_READINGS_REQUIRED} required.`,
+        sensorData: {
+          accelerometer: accelerationData,
+          gyroscope: rotationData,
+          magnetometer: magnetometerData,
+          abnormalReadingsPercentage: 0,
+          variability: {
+            acceleration: 0,
+            rotation: 0,
+            magnetic: 0
+          },
+          rawData: rawSensorData,
+          connectionStatus: 'connected'
+        }
+      });
+      return;
+    }
+    
     // Analyze the collected data with increased sensitivity
     const abnormalAccelCount = accelerationData.filter(value => value > ACCELERATION_THRESHOLD).length;
     const abnormalRotationCount = rotationData.filter(value => value > ROTATION_THRESHOLD).length;
     
     // Calculate percentage of abnormal readings
-    const totalReadings = accelerationData.length + rotationData.length;
-    const abnormalReadings = abnormalAccelCount + abnormalRotationCount;
-    const abnormalPercentage = totalReadings > 0 ? (abnormalReadings / totalReadings) * 100 : 0;
+    const abnormalReadings = abnormalReadingsCountRef.current;
+    const abnormalPercentage = (abnormalReadings / totalReadings) * 100;
+    
+    console.log(`Abnormal readings: ${abnormalReadings}/${totalReadings} (${abnormalPercentage.toFixed(1)}%)`);
     
     // Calculate variability in readings (standard deviation)
     const accelVariability = calculateStandardDeviation(accelerationData);
     const rotationVariability = calculateStandardDeviation(rotationData);
     const magnetoVariability = calculateStandardDeviation(magnetometerData);
     
+    console.log(`Variability: accel=${accelVariability.toFixed(2)}, rotation=${rotationVariability.toFixed(2)}`);
+    
     // Enhanced detection logic with lower thresholds and multiple factors
     const hasAbnormalPercentage = abnormalPercentage > ABNORMAL_PERCENTAGE_THRESHOLD;
-    const hasHighAccelVariability = accelVariability > 0.7;
-    const hasHighRotationVariability = rotationVariability > 7;
+    const hasHighAccelVariability = accelVariability > 0.5; // Even more sensitive
+    const hasHighRotationVariability = rotationVariability > 5; // Even more sensitive
+    
+    // Force abnormal result if significant movement detected
+    const forceAbnormal = abnormalReadings > 5;
     
     // Determine result with improved sensitivity
-    const balanceResult = (hasAbnormalPercentage || hasHighAccelVariability || hasHighRotationVariability) ? 'abnormal' : 'normal';
+    const balanceResult = (hasAbnormalPercentage || hasHighAccelVariability || hasHighRotationVariability || forceAbnormal) ? 'abnormal' : 'normal';
+    
+    console.log(`Test result: ${balanceResult} (abnormal%=${hasAbnormalPercentage}, accelVar=${hasHighAccelVariability}, rotVar=${hasHighRotationVariability}, force=${forceAbnormal})`);
     
     // Create detailed explanation
     let detailedExplanation = `Analyzed ${totalReadings} motion readings over 15 seconds.\n`;
@@ -444,6 +512,12 @@ const BalanceTest = () => {
                             <div>γ: {currentOrientation.gamma.toFixed(2)}</div>
                           </div>
                         </div>
+                      </div>
+                      
+                      {/* Debug info counter */}
+                      <div className="mt-2 text-xs text-gray-500">
+                        <div>Total readings: {debugInfo.totalReadings}</div>
+                        <div>Abnormal movements: {debugInfo.abnormalCount}</div>
                       </div>
                     </div>
                     
