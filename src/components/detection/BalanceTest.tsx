@@ -9,9 +9,10 @@ import { StrokeDetectionResult } from "@/types";
 import { Motion } from '@capacitor/motion';
 import { toast } from "sonner";
 
-// More sensitive threshold values for better detection
-const ACCELERATION_THRESHOLD = 1.2; // Reduced from 2.5 for better sensitivity (m/s²)
-const ROTATION_THRESHOLD = 15; // Reduced from 30 for better sensitivity (degrees/s)
+// Much more sensitive threshold values for better detection
+const ACCELERATION_THRESHOLD = 0.8; // Reduced from 1.2 for higher sensitivity (m/s²)
+const ROTATION_THRESHOLD = 10; // Reduced from 15 for higher sensitivity (degrees/s)
+const ABNORMAL_PERCENTAGE_THRESHOLD = 10; // Lower threshold to flag as abnormal (%)
 const TEST_DURATION = 15; // 15 seconds test duration
 
 interface SensorReading {
@@ -98,10 +99,11 @@ const BalanceTest = () => {
             orientation: { ...currentOrientation, magnitude: 0 } // Will be updated by orientation listener
           });
           
-          // Count abnormal readings
+          // Count abnormal readings - increased sensitivity
           totalReadings++;
           if (magnitude > ACCELERATION_THRESHOLD) {
-            abnormalReadingsCount++;
+            // Increment with higher weight for more significant movements
+            abnormalReadingsCount += (magnitude > ACCELERATION_THRESHOLD * 1.5) ? 2 : 1;
           }
           
           // Update raw sensor data state
@@ -138,8 +140,10 @@ const BalanceTest = () => {
             };
           }
           
+          // Increased sensitivity for rotation detection
           if (rotationMagnitude > ROTATION_THRESHOLD) {
-            abnormalReadingsCount++;
+            // Weight higher rotations more in the abnormal count
+            abnormalReadingsCount += (rotationMagnitude > ROTATION_THRESHOLD * 1.5) ? 2 : 1;
           }
           
           // Store magnetometer-like data
@@ -211,7 +215,7 @@ const BalanceTest = () => {
       orientationListenerRef.current = null;
     }
     
-    // Analyze the collected data
+    // Analyze the collected data with increased sensitivity
     const abnormalAccelCount = accelerationData.filter(value => value > ACCELERATION_THRESHOLD).length;
     const abnormalRotationCount = rotationData.filter(value => value > ROTATION_THRESHOLD).length;
     
@@ -225,10 +229,13 @@ const BalanceTest = () => {
     const rotationVariability = calculateStandardDeviation(rotationData);
     const magnetoVariability = calculateStandardDeviation(magnetometerData);
     
-    // Determine result based on threshold (lowered to 15% for better sensitivity)
-    const balanceResult = abnormalPercentage > 15 || 
-                        accelVariability > 1.0 || 
-                        rotationVariability > 10 ? 'abnormal' : 'normal';
+    // Enhanced detection logic with lower thresholds and multiple factors
+    const hasAbnormalPercentage = abnormalPercentage > ABNORMAL_PERCENTAGE_THRESHOLD;
+    const hasHighAccelVariability = accelVariability > 0.7;
+    const hasHighRotationVariability = rotationVariability > 7;
+    
+    // Determine result with improved sensitivity
+    const balanceResult = (hasAbnormalPercentage || hasHighAccelVariability || hasHighRotationVariability) ? 'abnormal' : 'normal';
     
     // Create detailed explanation
     let detailedExplanation = `Analyzed ${totalReadings} motion readings over 15 seconds.\n`;
@@ -269,7 +276,9 @@ const BalanceTest = () => {
           acceleration: accelVariability,
           rotation: rotationVariability,
           magnetic: magnetoVariability
-        }
+        },
+        rawData: rawSensorData,
+        connectionStatus: 'connected'
       }
     });
   };
