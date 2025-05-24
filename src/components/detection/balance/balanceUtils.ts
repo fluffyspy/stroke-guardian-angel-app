@@ -4,6 +4,10 @@ import { StrokeDetectionResult } from "@/types";
 // Constants for balance detection sensitivity
 export const ACCELERATION_THRESHOLD = 0.15; // Extremely sensitive (m/s²)
 export const ROTATION_THRESHOLD = 1.5;     // Extremely sensitive (degrees/s)
+export const GYROSCOPE_THRESHOLD = 2.0;    // Gyroscope sensitivity (rad/s)
+export const MAGNETOMETER_THRESHOLD = 15;  // Magnetometer sensitivity for linear movement
+export const SWAY_THRESHOLD = 0.2;         // Forward/backward sway detection (m/s²)
+export const UNSTABLE_STEP_THRESHOLD = 0.25; // Unstable step detection (m/s²)
 export const ABNORMAL_PERCENTAGE_THRESHOLD = 2; // Very low threshold to flag as abnormal (%)
 export const MIN_READINGS_REQUIRED = 5;    // Minimum readings required for valid test
 export const TEST_DURATION = 15;           // 15 seconds test duration
@@ -22,6 +26,18 @@ export interface SensorReading {
     gamma: number | null;
     magnitude: number;
   };
+  gyroscope?: {
+    x: number;
+    y: number;
+    z: number;
+    magnitude: number;
+  };
+  magnetometer?: {
+    x: number;
+    y: number;
+    z: number;
+    magnitude: number;
+  };
 }
 
 // Calculate standard deviation as a measure of variability
@@ -35,6 +51,54 @@ export const calculateStandardDeviation = (values: number[]): number => {
   return Math.sqrt(variance);
 };
 
+// Detect specific movement patterns
+export const detectMovementPatterns = (rawSensorData: SensorReading[]) => {
+  let swayForwardBackward = 0;
+  let unstableSteps = 0;
+  let suddenMovements = 0;
+  let linearMovementIssues = 0;
+
+  for (let i = 1; i < rawSensorData.length; i++) {
+    const current = rawSensorData[i];
+    const previous = rawSensorData[i - 1];
+
+    // Detect forward/backward sway using Y-axis acceleration
+    const yAxisChange = Math.abs(current.acceleration.y - previous.acceleration.y);
+    if (yAxisChange > SWAY_THRESHOLD) {
+      swayForwardBackward++;
+    }
+
+    // Detect unstable steps using overall acceleration magnitude changes
+    const accelChange = Math.abs(current.acceleration.magnitude - previous.acceleration.magnitude);
+    if (accelChange > UNSTABLE_STEP_THRESHOLD) {
+      unstableSteps++;
+    }
+
+    // Detect sudden movements using gyroscope data (if available)
+    if (current.gyroscope && previous.gyroscope) {
+      const gyroChange = Math.abs(current.gyroscope.magnitude - previous.gyroscope.magnitude);
+      if (gyroChange > GYROSCOPE_THRESHOLD) {
+        suddenMovements++;
+      }
+    }
+
+    // Detect linear movement issues using magnetometer data (if available)
+    if (current.magnetometer && previous.magnetometer) {
+      const magnetoChange = Math.abs(current.magnetometer.magnitude - previous.magnetometer.magnitude);
+      if (magnetoChange > MAGNETOMETER_THRESHOLD) {
+        linearMovementIssues++;
+      }
+    }
+  }
+
+  return {
+    swayForwardBackward,
+    unstableSteps,
+    suddenMovements,
+    linearMovementIssues
+  };
+};
+
 export const createDetailedExplanation = (
   totalReadings: number,
   abnormalReadings: number,
@@ -45,12 +109,30 @@ export const createDetailedExplanation = (
   accelVariability: number,
   rotationVariability: number, 
   magnetoVariability: number,
-  balanceResult: 'normal' | 'abnormal'
+  balanceResult: 'normal' | 'abnormal',
+  movementPatterns: any
 ): string => {
   let detailedExplanation = `Analyzed ${totalReadings} motion readings over 15 seconds.\n`;
   
   if (balanceResult === 'abnormal') {
     detailedExplanation += `${abnormalPercentage.toFixed(1)}% of readings showed balance irregularities.\n`;
+    
+    // Add movement pattern details
+    if (movementPatterns.swayForwardBackward > 0) {
+      detailedExplanation += `Detected ${movementPatterns.swayForwardBackward} forward/backward sway movements (threshold: ${SWAY_THRESHOLD} m/s²).\n`;
+    }
+    
+    if (movementPatterns.unstableSteps > 0) {
+      detailedExplanation += `Detected ${movementPatterns.unstableSteps} unstable steps (threshold: ${UNSTABLE_STEP_THRESHOLD} m/s²).\n`;
+    }
+    
+    if (movementPatterns.suddenMovements > 0) {
+      detailedExplanation += `Detected ${movementPatterns.suddenMovements} sudden movements (gyroscope threshold: ${GYROSCOPE_THRESHOLD} rad/s).\n`;
+    }
+    
+    if (movementPatterns.linearMovementIssues > 0) {
+      detailedExplanation += `Detected ${movementPatterns.linearMovementIssues} linear movement issues (magnetometer threshold: ${MAGNETOMETER_THRESHOLD} units).\n`;
+    }
     
     const abnormalAccelCount = accelerationData.filter(value => value > ACCELERATION_THRESHOLD).length;
     if (abnormalAccelCount > 0) {
@@ -77,10 +159,10 @@ export const createDetailedExplanation = (
   return detailedExplanation;
 };
 
-// Create a CSV file from sensor data and trigger download
-export const createAndDownloadCSV = (rawSensorData: SensorReading[]): void => {
+// Create a CSV file from sensor data
+export const createAndDownloadCSV = (rawSensorData: SensorReading[]): string => {
   // Create CSV header
-  let csv = "timestamp,accel_x,accel_y,accel_z,accel_magnitude,orient_alpha,orient_beta,orient_gamma,orient_magnitude\n";
+  let csv = "timestamp,accel_x,accel_y,accel_z,accel_magnitude,orient_alpha,orient_beta,orient_gamma,orient_magnitude,gyro_x,gyro_y,gyro_z,gyro_magnitude,magneto_x,magneto_y,magneto_z,magneto_magnitude\n";
   
   // Add data rows
   rawSensorData.forEach(reading => {
@@ -93,7 +175,15 @@ export const createAndDownloadCSV = (rawSensorData: SensorReading[]): void => {
       reading.orientation.alpha || 0,
       reading.orientation.beta || 0,
       reading.orientation.gamma || 0,
-      reading.orientation.magnitude
+      reading.orientation.magnitude,
+      reading.gyroscope?.x || 0,
+      reading.gyroscope?.y || 0,
+      reading.gyroscope?.z || 0,
+      reading.gyroscope?.magnitude || 0,
+      reading.magnetometer?.x || 0,
+      reading.magnetometer?.y || 0,
+      reading.magnetometer?.z || 0,
+      reading.magnetometer?.magnitude || 0
     ];
     
     csv += row.join(",") + "\n";
@@ -143,11 +233,20 @@ export const analyzeBalanceData = (
   const rotationVariability = calculateStandardDeviation([...rotationData, ...gyroscopeData]);
   const magnetoVariability = calculateStandardDeviation(magnetometerData);
   
+  // Detect specific movement patterns
+  const movementPatterns = detectMovementPatterns(rawSensorData);
+  
   // Enhanced detection logic with lower thresholds and multiple factors
   const hasAbnormalPercentage = abnormalPercentage > ABNORMAL_PERCENTAGE_THRESHOLD;
   const hasHighAccelVariability = accelVariability > 0.3; // Even more sensitive
   const hasHighRotationVariability = rotationVariability > 3; // Even more sensitive
   const hasHighMagnetoVariability = magnetoVariability > 10; // Even more sensitive
+  
+  // Check for specific movement pattern issues
+  const hasSwayIssues = movementPatterns.swayForwardBackward > 2;
+  const hasUnstableSteps = movementPatterns.unstableSteps > 3;
+  const hasSuddenMovements = movementPatterns.suddenMovements > 2;
+  const hasLinearIssues = movementPatterns.linearMovementIssues > 2;
   
   // Force abnormal result if significant movement detected
   const forceAbnormal = abnormalReadings > 3;
@@ -155,7 +254,8 @@ export const analyzeBalanceData = (
   // Determine result with improved sensitivity - medical grade
   const balanceResult = (hasAbnormalPercentage || hasHighAccelVariability || 
                         hasHighRotationVariability || hasHighMagnetoVariability || 
-                        forceAbnormal) ? 'abnormal' : 'normal';
+                        hasSwayIssues || hasUnstableSteps || hasSuddenMovements ||
+                        hasLinearIssues || forceAbnormal) ? 'abnormal' : 'normal';
   
   // Create detailed explanation
   const detailedExplanation = createDetailedExplanation(
@@ -168,7 +268,8 @@ export const analyzeBalanceData = (
     accelVariability,
     rotationVariability,
     magnetoVariability,
-    balanceResult
+    balanceResult,
+    movementPatterns
   );
   
   // Return the test result

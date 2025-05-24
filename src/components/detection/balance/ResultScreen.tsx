@@ -5,6 +5,8 @@ import { AlertTriangle, CheckCircle, Download } from "lucide-react";
 import { StrokeDetectionResult } from "@/types";
 import { SensorReading, createAndDownloadCSV } from "./balanceUtils";
 import { toast } from 'sonner';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Capacitor } from '@capacitor/core';
 
 interface ResultScreenProps {
   result: StrokeDetectionResult | null;
@@ -17,26 +19,46 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
 }) => {
   const [showSensorReadings, setShowSensorReadings] = useState(false);
   
-  // Create a CSV file from sensor data and trigger download
-  const downloadSensorData = () => {
+  // Create a CSV file from sensor data and save to mobile storage
+  const downloadSensorData = async () => {
     if (rawSensorData.length === 0) {
       toast.error("No sensor data available to download");
       return;
     }
     
-    const csv = createAndDownloadCSV(rawSensorData);
-    
-    // Create blob and download
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `balance-test-data-${new Date().toISOString()}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    toast.success("Sensor data downloaded as CSV");
+    try {
+      const csv = createAndDownloadCSV(rawSensorData);
+      const fileName = `balance-test-data-${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+      
+      if (Capacitor.isNativePlatform()) {
+        // For mobile devices, save to Documents directory
+        await Filesystem.writeFile({
+          path: fileName,
+          data: csv,
+          directory: Directory.Documents,
+          encoding: Encoding.UTF8
+        });
+        
+        toast.success(`CSV file saved to Documents folder as: ${fileName}`);
+        console.log(`File saved to Documents: ${fileName}`);
+      } else {
+        // For web, use traditional download
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        toast.success("CSV file downloaded to Downloads folder");
+      }
+    } catch (error) {
+      console.error("Error saving CSV file:", error);
+      toast.error("Failed to save CSV file. Please try again.");
+    }
   };
 
   return (
@@ -107,6 +129,12 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
                   <div key={idx} className="bg-white p-1 rounded">
                     <div>Accel: {reading.acceleration.magnitude.toFixed(2)} m/s²</div>
                     <div>Rotation: {reading.orientation.magnitude.toFixed(2)}°</div>
+                    {reading.gyroscope && (
+                      <div>Gyro: {reading.gyroscope.magnitude.toFixed(2)} rad/s</div>
+                    )}
+                    {reading.magnetometer && (
+                      <div>Magneto: {reading.magnetometer.magnitude.toFixed(2)} units</div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -118,8 +146,11 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
                   onClick={downloadSensorData}
                 >
                   <Download className="h-3 w-3 mr-1" />
-                  Download Complete Data (CSV)
+                  Save to Mobile Storage (CSV)
                 </Button>
+                <p className="text-xs text-gray-500 mt-1">
+                  File will be saved to Documents folder on your device
+                </p>
               </div>
             </div>
           )}

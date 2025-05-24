@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Motion } from '@capacitor/motion';
 import { toast } from 'sonner';
-import { SensorReading, ACCELERATION_THRESHOLD, ROTATION_THRESHOLD } from './balanceUtils';
+import { SensorReading, ACCELERATION_THRESHOLD, ROTATION_THRESHOLD, GYROSCOPE_THRESHOLD } from './balanceUtils';
 
 interface SensorState {
   accelerationData: number[];
@@ -63,6 +63,7 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
   const hasMotionRef = useRef<boolean>(false);
   const sensorTypesRef = useRef<Set<string>>(new Set());
   const lastReadingRef = useRef<SensorReading | null>(null);
+  const previousOrientationRef = useRef<{ alpha: number; beta: number; gamma: number } | null>(null);
 
   // Check for sensor availability with better error handling
   useEffect(() => {
@@ -135,6 +136,7 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
     readingsCountRef.current = 0;
     abnormalReadingsCountRef.current = 0;
     hasMotionRef.current = false;
+    previousOrientationRef.current = null;
     
     const startSensors = async () => {
       try {
@@ -215,17 +217,39 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
           // Store rotation data
           setRotationData(prev => [...prev, rotationMagnitude]);
           
+          // Calculate gyroscope-like data from orientation changes
+          if (previousOrientationRef.current) {
+            const gyroX = Math.abs((beta || 0) - previousOrientationRef.current.beta);
+            const gyroY = Math.abs((gamma || 0) - previousOrientationRef.current.gamma);
+            const gyroZ = Math.abs((alpha || 0) - previousOrientationRef.current.alpha);
+            const gyroMagnitude = Math.sqrt(gyroX * gyroX + gyroY * gyroY + gyroZ * gyroZ);
+            
+            // Store gyroscope-like data
+            setGyroscopeData(prev => [...prev, gyroMagnitude]);
+            
+            // Update current gyro display values
+            setCurrentGyro({ x: gyroX, y: gyroY, z: gyroZ });
+            
+            // Check for abnormal gyroscope-like readings
+            if (gyroMagnitude > GYROSCOPE_THRESHOLD) {
+              const weight = gyroMagnitude > GYROSCOPE_THRESHOLD * 2 ? 3 :
+                            gyroMagnitude > GYROSCOPE_THRESHOLD * 1.5 ? 2 : 1;
+              abnormalReadingsCountRef.current += weight;
+              console.log(`Abnormal gyroscope-like reading! Magnitude: ${gyroMagnitude.toFixed(4)}, Weight: ${weight}`);
+            }
+          }
+          
           // Magnetometer-like data from alpha (compass direction)
           if (alpha !== null) {
-            setMagnetometerData(prev => [...prev, alpha]);
+            const magnetoX = Math.cos((alpha * Math.PI) / 180);
+            const magnetoY = Math.sin((alpha * Math.PI) / 180);
+            const magnetoZ = 0;
+            const magnetoMagnitude = Math.sqrt(magnetoX * magnetoX + magnetoY * magnetoY);
+            
+            setMagnetometerData(prev => [...prev, magnetoMagnitude]);
             
             // Update magnetometer current values
-            setCurrentMagnetometer(prev => ({
-              ...prev,
-              x: Math.cos((alpha * Math.PI) / 180),
-              y: Math.sin((alpha * Math.PI) / 180),
-              z: 0
-            }));
+            setCurrentMagnetometer({ x: magnetoX, y: magnetoY, z: magnetoZ });
           }
           
           // Update last reading with new orientation data if it exists
@@ -237,16 +261,38 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
               magnitude: rotationMagnitude
             };
             
+            // Add gyroscope-like data if we have previous readings
+            if (previousOrientationRef.current) {
+              const gyroX = Math.abs((beta || 0) - previousOrientationRef.current.beta);
+              const gyroY = Math.abs((gamma || 0) - previousOrientationRef.current.gamma);
+              const gyroZ = Math.abs((alpha || 0) - previousOrientationRef.current.alpha);
+              const gyroMagnitude = Math.sqrt(gyroX * gyroX + gyroY * gyroY + gyroZ * gyroZ);
+              
+              lastReadingRef.current.gyroscope = {
+                x: gyroX,
+                y: gyroY,
+                z: gyroZ,
+                magnitude: gyroMagnitude
+              };
+            }
+            
             // Also update magnetometer data from alpha
             if (alpha !== null) {
+              const magnetoX = Math.cos((alpha * Math.PI) / 180);
+              const magnetoY = Math.sin((alpha * Math.PI) / 180);
+              const magnetoMagnitude = Math.sqrt(magnetoX * magnetoX + magnetoY * magnetoY);
+              
               lastReadingRef.current.magnetometer = {
-                x: Math.cos((alpha * Math.PI) / 180),
-                y: Math.sin((alpha * Math.PI) / 180),
+                x: magnetoX,
+                y: magnetoY,
                 z: 0,
-                magnitude: 1 // Unit vector magnitude
+                magnitude: magnetoMagnitude
               };
             }
           }
+          
+          // Store current orientation for next gyro calculation
+          previousOrientationRef.current = { alpha: alpha || 0, beta: beta || 0, gamma: gamma || 0 };
           
           // Extreme sensitivity for rotation detection (medical use)
           if (rotationMagnitude > ROTATION_THRESHOLD) {
@@ -355,6 +401,7 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
     setMagnetometerData([]);
     setRawSensorData([]);
     lastReadingRef.current = null;
+    previousOrientationRef.current = null;
     readingsCountRef.current = 0;
     abnormalReadingsCountRef.current = 0;
     hasMotionRef.current = false;
