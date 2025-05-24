@@ -57,7 +57,6 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
   // Refs for cleaning up listeners and tracking counts
   const accelListenerRef = useRef<any>(null);
   const orientationListenerRef = useRef<any>(null);
-  const gyroListenerRef = useRef<any>(null);
   const readingsCountRef = useRef<number>(0);
   const abnormalReadingsCountRef = useRef<number>(0);
   const hasMotionRef = useRef<boolean>(false);
@@ -88,19 +87,6 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
           sensorsDetected = true;
           orientCheck.remove();
         });
-        
-        // Try to check gyroscope sensor
-        try {
-          console.log("Checking gyroscope availability...");
-          const gyroCheck = await Motion.addListener('gyroscope', (event) => {
-            console.log("Gyroscope check successful:", event);
-            sensorTypesRef.current.add('gyroscope');
-            sensorsDetected = true;
-            gyroCheck.remove();
-          });
-        } catch (e) {
-          console.warn("Gyroscope not available:", e);
-        }
         
         // Set a timeout to check if we got any readings
         setTimeout(() => {
@@ -305,48 +291,6 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
           }
         });
         
-        // Try to get gyroscope data if available
-        try {
-          gyroListenerRef.current = await Motion.addListener('gyroscope', (event) => {
-            sensorTypesRef.current.add('gyroscope');
-            const { x, y, z } = event;
-            
-            // Set current values for gyroscope
-            setCurrentGyro({ x: x || 0, y: y || 0, z: z || 0 });
-            
-            // Calculate gyroscope magnitude
-            const gyroMagnitude = Math.sqrt(
-              (x || 0) * (x || 0) + 
-              (y || 0) * (y || 0) + 
-              (z || 0) * (z || 0)
-            );
-            
-            console.log(`Gyroscope: x=${x?.toFixed(4) || 'null'}, y=${y?.toFixed(4) || 'null'}, z=${z?.toFixed(4) || 'null'}, mag=${gyroMagnitude.toFixed(4)}`);
-            
-            // Store gyroscope data
-            setGyroscopeData(prev => [...prev, gyroMagnitude]);
-            
-            // Update last reading with gyroscope data if it exists
-            if (lastReadingRef.current) {
-              lastReadingRef.current.gyroscope = {
-                x, y, z,
-                magnitude: gyroMagnitude
-              };
-            }
-            
-            // Count abnormal gyroscope readings
-            if (gyroMagnitude > ROTATION_THRESHOLD * 0.8) { // Slightly more sensitive for gyro
-              const weight = gyroMagnitude > ROTATION_THRESHOLD * 1.6 ? 3 :
-                            gyroMagnitude > ROTATION_THRESHOLD * 1.2 ? 2 : 1;
-                          
-              abnormalReadingsCountRef.current += weight;
-              console.log(`Abnormal gyroscope! Magnitude: ${gyroMagnitude.toFixed(4)}, Weight: ${weight}, Total abnormal: ${abnormalReadingsCountRef.current}`);
-            }
-          });
-        } catch (error) {
-          console.warn("Gyroscope not available:", error);
-        }
-        
         // Set up a check to verify we're actually getting sensor data
         setTimeout(() => {
           if (!hasMotionRef.current) {
@@ -386,10 +330,6 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
       if (orientationListenerRef.current) {
         orientationListenerRef.current.remove();
         orientationListenerRef.current = null;
-      }
-      if (gyroListenerRef.current) {
-        gyroListenerRef.current.remove();
-        gyroListenerRef.current = null;
       }
     };
   }, [testStarted, testCompleted, sensorAvailable, debugInfo.lastUpdate]);
