@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { Progress } from "@/components/ui/progress";
 import { TEST_DURATION, ACCELERATION_THRESHOLD, ROTATION_THRESHOLD } from './balanceUtils';
@@ -31,6 +32,11 @@ export const LiveTestScreen: React.FC<LiveTestScreenProps> = ({
   gyroscopeData,
   readingsCount
 }) => {
+  // Helper function to safely format numbers, handling null values
+  const safeToFixed = (value: number | null, digits: number = 2): string => {
+    return value !== null ? value.toFixed(digits) : 'N/A';
+  };
+
   return (
     <div className="space-y-6">
       <div className="aspect-video bg-gray-100 rounded-lg flex items-center justify-center">
@@ -45,9 +51,9 @@ export const LiveTestScreen: React.FC<LiveTestScreenProps> = ({
               <div className="bg-white p-2 rounded shadow-sm">
                 <div className="font-medium">Acceleration</div>
                 <div className="grid grid-cols-3 gap-1 mt-1">
-                  <div>X: {currentAccel.x.toFixed(2)}</div>
-                  <div>Y: {currentAccel.y.toFixed(2)}</div>
-                  <div>Z: {currentAccel.z.toFixed(2)}</div>
+                  <div>X: {safeToFixed(currentAccel.x)}</div>
+                  <div>Y: {safeToFixed(currentAccel.y)}</div>
+                  <div>Z: {safeToFixed(currentAccel.z)}</div>
                 </div>
                 <div className="mt-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div 
@@ -61,15 +67,15 @@ export const LiveTestScreen: React.FC<LiveTestScreenProps> = ({
               <div className="bg-white p-2 rounded shadow-sm">
                 <div className="font-medium">Orientation</div>
                 <div className="grid grid-cols-3 gap-1 mt-1">
-                  <div>α: {currentRotation.alpha.toFixed(0)}°</div>
-                  <div>β: {currentRotation.beta.toFixed(0)}°</div>
-                  <div>γ: {currentRotation.gamma.toFixed(0)}°</div>
+                  <div>α: {safeToFixed(currentRotation.alpha, 0)}°</div>
+                  <div>β: {safeToFixed(currentRotation.beta, 0)}°</div>
+                  <div>γ: {safeToFixed(currentRotation.gamma, 0)}°</div>
                 </div>
                 <div className="mt-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-green-500 rounded-full" 
                     style={{ 
-                      width: `${Math.min(100, Math.sqrt(currentRotation.alpha**2 + currentRotation.beta**2 + currentRotation.gamma**2) / 3)}%` 
+                      width: `${Math.min(100, Math.sqrt((currentRotation.alpha || 0)**2 + (currentRotation.beta || 0)**2 + (currentRotation.gamma || 0)**2) / 3)}%` 
                     }}
                   ></div>
                 </div>
@@ -80,9 +86,9 @@ export const LiveTestScreen: React.FC<LiveTestScreenProps> = ({
             <div className="bg-white p-2 rounded shadow-sm mt-2">
               <div className="font-medium">Gyroscope (from orientation)</div>
               <div className="grid grid-cols-3 gap-1 mt-1">
-                <div>X: {currentGyro.x.toFixed(2)}</div>
-                <div>Y: {currentGyro.y.toFixed(2)}</div>
-                <div>Z: {currentGyro.z.toFixed(2)}</div>
+                <div>X: {safeToFixed(currentGyro.x)}</div>
+                <div>Y: {safeToFixed(currentGyro.y)}</div>
+                <div>Z: {safeToFixed(currentGyro.z)}</div>
               </div>
               <div className="mt-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                 <div 
@@ -146,3 +152,4 @@ export const LiveTestScreen: React.FC<LiveTestScreenProps> = ({
     </div>
   );
 };
+
