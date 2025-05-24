@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,13 +72,13 @@ const BalanceTest = () => {
     
     console.log("Starting timer countdown from", TEST_DURATION);
     
-    // Start the test timer with proper cleanup
+    // Start the test timer - this should continue regardless of sensor issues
     intervalRef.current = setInterval(() => {
       setTimer(prevTimer => {
-        console.log("Timer tick, current value:", prevTimer);
+        console.log("Timer tick, current value:", prevTimer, "Readings collected:", readingsCountRef.current);
         
         if (prevTimer <= 1) {
-          console.log("Timer reached 0, completing test");
+          console.log("Timer reached 0, completing test with", readingsCountRef.current, "readings");
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
@@ -93,13 +92,19 @@ const BalanceTest = () => {
   };
 
   const completeTest = () => {
-    console.log("Completing test");
+    console.log("Completing test with", readingsCountRef.current, "total readings");
     setTestCompleted(true);
+    
+    // Ensure we have the latest data counts
+    const finalReadingsCount = readingsCountRef.current;
+    const finalAbnormalCount = abnormalReadingsCountRef.current;
+    
+    console.log("Final analysis - Readings:", finalReadingsCount, "Abnormal:", finalAbnormalCount);
     
     // Analyze collected data and set result
     const result = analyzeBalanceData(
-      readingsCountRef.current,
-      abnormalReadingsCountRef.current,
+      finalReadingsCount,
+      finalAbnormalCount,
       accelerationData,
       rotationData,
       gyroscopeData,
@@ -107,6 +112,7 @@ const BalanceTest = () => {
       rawSensorData
     );
     
+    console.log("Analysis result:", result);
     setResult(result);
   };
 
@@ -123,6 +129,8 @@ const BalanceTest = () => {
     setResult(null);
     resetSensorData();
     setInstructionsRead(false);
+    
+    console.log("Test reset");
   };
 
   return (
