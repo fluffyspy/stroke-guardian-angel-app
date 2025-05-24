@@ -1,16 +1,15 @@
-
 import { StrokeDetectionResult } from "@/types";
 
-// Constants for balance detection sensitivity
-export const ACCELERATION_THRESHOLD = 0.15; // Extremely sensitive (m/s²)
-export const ROTATION_THRESHOLD = 1.5;     // Extremely sensitive (degrees/s)
-export const GYROSCOPE_THRESHOLD = 2.0;    // Gyroscope sensitivity (rad/s)
-export const MAGNETOMETER_THRESHOLD = 15;  // Magnetometer sensitivity for linear movement
-export const SWAY_THRESHOLD = 0.2;         // Forward/backward sway detection (m/s²)
-export const UNSTABLE_STEP_THRESHOLD = 0.25; // Unstable step detection (m/s²)
-export const ABNORMAL_PERCENTAGE_THRESHOLD = 2; // Very low threshold to flag as abnormal (%)
-export const MIN_READINGS_REQUIRED = 5;    // Minimum readings required for valid test
-export const TEST_DURATION = 15;           // 15 seconds test duration
+// Constants for balance detection sensitivity - adjusted for realistic medical detection
+export const ACCELERATION_THRESHOLD = 0.5; // Increased from 0.15 - normal walking has micro-movements
+export const ROTATION_THRESHOLD = 8.0;     // Increased from 1.5 - normal holding has small rotations
+export const GYROSCOPE_THRESHOLD = 10.0;   // Increased from 2.0 - more realistic for actual balance issues
+export const MAGNETOMETER_THRESHOLD = 25;  // Increased from 15 - normal movement variation
+export const SWAY_THRESHOLD = 0.8;         // Increased from 0.2 - significant sway detection
+export const UNSTABLE_STEP_THRESHOLD = 1.0; // Increased from 0.25 - actual unstable steps
+export const ABNORMAL_PERCENTAGE_THRESHOLD = 15; // Increased from 2% to 15% - more realistic
+export const MIN_READINGS_REQUIRED = 5;    // Keep same - minimum readings required for valid test
+export const TEST_DURATION = 15;           // Keep same - 15 seconds test duration
 
 export interface SensorReading {
   timestamp: number;
@@ -224,7 +223,7 @@ export const analyzeBalanceData = (
     };
   }
   
-  // Analyze the collected data with increased sensitivity
+  // Analyze the collected data with more realistic medical-grade sensitivity
   const abnormalReadings = abnormalReadingsCount;
   const abnormalPercentage = (abnormalReadings / readingsCount) * 100;
   
@@ -236,22 +235,22 @@ export const analyzeBalanceData = (
   // Detect specific movement patterns
   const movementPatterns = detectMovementPatterns(rawSensorData);
   
-  // Enhanced detection logic with lower thresholds and multiple factors
+  // More realistic detection logic - adjusted thresholds for actual balance issues
   const hasAbnormalPercentage = abnormalPercentage > ABNORMAL_PERCENTAGE_THRESHOLD;
-  const hasHighAccelVariability = accelVariability > 0.3; // Even more sensitive
-  const hasHighRotationVariability = rotationVariability > 3; // Even more sensitive
-  const hasHighMagnetoVariability = magnetoVariability > 10; // Even more sensitive
+  const hasHighAccelVariability = accelVariability > 1.2; // Increased from 0.3 - significant variability
+  const hasHighRotationVariability = rotationVariability > 15; // Increased from 3 - significant rotation issues
+  const hasHighMagnetoVariability = magnetoVariability > 30; // Increased from 10 - significant magnetic variation
   
-  // Check for specific movement pattern issues
-  const hasSwayIssues = movementPatterns.swayForwardBackward > 2;
-  const hasUnstableSteps = movementPatterns.unstableSteps > 3;
-  const hasSuddenMovements = movementPatterns.suddenMovements > 2;
-  const hasLinearIssues = movementPatterns.linearMovementIssues > 2;
+  // Check for specific movement pattern issues - more conservative thresholds
+  const hasSwayIssues = movementPatterns.swayForwardBackward > 8; // Increased from 2
+  const hasUnstableSteps = movementPatterns.unstableSteps > 10; // Increased from 3
+  const hasSuddenMovements = movementPatterns.suddenMovements > 6; // Increased from 2
+  const hasLinearIssues = movementPatterns.linearMovementIssues > 8; // Increased from 2
   
-  // Force abnormal result if significant movement detected
-  const forceAbnormal = abnormalReadings > 3;
+  // Only flag as abnormal if significant issues detected - removed force abnormal
+  const forceAbnormal = abnormalReadings > 20; // Increased from 3 - much higher threshold
   
-  // Determine result with improved sensitivity - medical grade
+  // Determine result with improved medical-grade sensitivity
   const balanceResult = (hasAbnormalPercentage || hasHighAccelVariability || 
                         hasHighRotationVariability || hasHighMagnetoVariability || 
                         hasSwayIssues || hasUnstableSteps || hasSuddenMovements ||
