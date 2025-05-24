@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,9 @@ const BalanceTest = () => {
   const [timer, setTimer] = useState(TEST_DURATION);
   const [result, setResult] = useState<StrokeDetectionResult | null>(null);
   const [instructionsRead, setInstructionsRead] = useState(false);
+  
+  // Use ref to store interval ID for proper cleanup
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Use our custom hook to handle sensor data
   const {
@@ -40,10 +43,24 @@ const BalanceTest = () => {
     sensorTypesRef
   } = useSensorData(testStarted, testCompleted);
 
+  // Clean up interval on component unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
+
   const startTest = () => {
     if (!sensorAvailable) {
       toast.error("Cannot start test without motion sensors");
       return;
+    }
+    
+    // Clear any existing interval first
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
     }
     
     setTestStarted(true);
@@ -54,20 +71,29 @@ const BalanceTest = () => {
     // Instructions for user
     toast.info("Hold the phone against the center of your chest and walk normally for 15 seconds");
     
-    // Start the test timer
-    const interval = setInterval(() => {
-      setTimer(prev => {
-        if (prev <= 1) {
-          clearInterval(interval);
+    console.log("Starting timer countdown from", TEST_DURATION);
+    
+    // Start the test timer with proper cleanup
+    intervalRef.current = setInterval(() => {
+      setTimer(prevTimer => {
+        console.log("Timer tick, current value:", prevTimer);
+        
+        if (prevTimer <= 1) {
+          console.log("Timer reached 0, completing test");
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
           completeTest();
           return 0;
         }
-        return prev - 1;
+        return prevTimer - 1;
       });
     }, 1000);
   };
 
   const completeTest = () => {
+    console.log("Completing test");
     setTestCompleted(true);
     
     // Analyze collected data and set result
@@ -85,6 +111,12 @@ const BalanceTest = () => {
   };
 
   const resetTest = () => {
+    // Clear interval when resetting
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    
     setTestStarted(false);
     setTestCompleted(false);
     setTimer(TEST_DURATION);
