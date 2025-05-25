@@ -116,7 +116,7 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
           const { x, y, z } = event.acceleration;
           const timestamp = Date.now();
           
-          console.log(`Accel data: x=${x.toFixed(3)}, y=${y.toFixed(3)}, z=${z.toFixed(3)}`);
+          console.log(`Raw accel data: x=${x}, y=${y}, z=${z}`);
           
           hasMotionRef.current = true;
           lastMotionTimeRef.current = timestamp;
@@ -126,40 +126,23 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
           
           // Calculate magnitude of acceleration vector
           const magnitude = Math.sqrt(x * x + y * y + z * z);
+          console.log(`Acceleration magnitude: ${magnitude}`);
           
           // Store acceleration data
           setAccelerationData(prev => {
             const newData = [...prev, magnitude];
-            console.log("Acceleration data length:", newData.length);
+            console.log("Acceleration data length:", newData.length, "Latest value:", magnitude);
             return newData;
           });
           
           // Increment total readings counter
           readingsCountRef.current += 1;
           
-          // Create new reading
-          const newReading: SensorReading = {
-            timestamp,
-            acceleration: { x, y, z, magnitude },
-            orientation: lastReadingRef.current?.orientation || { alpha: 0, beta: 0, gamma: 0, magnitude: 0 },
-            gyroscope: lastReadingRef.current?.gyroscope,
-            magnetometer: lastReadingRef.current?.magnetometer
-          };
-          
-          lastReadingRef.current = newReading;
-          
-          // Count abnormal readings
+          // Count abnormal readings - only if magnitude is significantly above threshold
           if (magnitude > ACCELERATION_THRESHOLD) {
             abnormalReadingsCountRef.current += 1;
             console.log(`Abnormal acceleration detected: ${magnitude.toFixed(3)}, total abnormal: ${abnormalReadingsCountRef.current}`);
           }
-          
-          // Store the raw data
-          setRawSensorData(prev => {
-            const newRawData = [...prev, newReading];
-            console.log("Raw sensor data length:", newRawData.length);
-            return newRawData;
-          });
           
           // Update debug info
           setDebugInfo(prev => ({
@@ -176,39 +159,47 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
           const { alpha, beta, gamma } = event;
           const timestamp = Date.now();
           
-          console.log(`Orientation: α=${alpha?.toFixed(1) || 'null'}, β=${beta?.toFixed(1) || 'null'}, γ=${gamma?.toFixed(1) || 'null'}`);
+          console.log(`Raw orientation: α=${alpha}, β=${beta}, γ=${gamma}`);
           
           hasMotionRef.current = true;
           lastMotionTimeRef.current = timestamp;
           
-          // Set current values for display
-          setCurrentRotation({ alpha: alpha || 0, beta: beta || 0, gamma: gamma || 0 });
+          // Set current values for display - handle null values properly
+          const safeAlpha = alpha ?? 0;
+          const safeBeta = beta ?? 0;
+          const safeGamma = gamma ?? 0;
+          
+          setCurrentRotation({ alpha: safeAlpha, beta: safeBeta, gamma: safeGamma });
           
           // Calculate rotation magnitude
           const rotationMagnitude = Math.sqrt(
-            (alpha || 0) * (alpha || 0) + 
-            (beta || 0) * (beta || 0) + 
-            (gamma || 0) * (gamma || 0)
+            safeAlpha * safeAlpha + 
+            safeBeta * safeBeta + 
+            safeGamma * safeGamma
           );
+          
+          console.log(`Rotation magnitude: ${rotationMagnitude}`);
           
           // Store rotation data
           setRotationData(prev => {
             const newData = [...prev, rotationMagnitude];
-            console.log("Rotation data length:", newData.length);
+            console.log("Rotation data length:", newData.length, "Latest value:", rotationMagnitude);
             return newData;
           });
           
           // Calculate gyroscope-like data from orientation changes
           if (previousOrientationRef.current) {
-            const gyroX = Math.abs((beta || 0) - previousOrientationRef.current.beta);
-            const gyroY = Math.abs((gamma || 0) - previousOrientationRef.current.gamma);
-            const gyroZ = Math.abs((alpha || 0) - previousOrientationRef.current.alpha);
+            const gyroX = Math.abs(safeBeta - previousOrientationRef.current.beta);
+            const gyroY = Math.abs(safeGamma - previousOrientationRef.current.gamma);
+            const gyroZ = Math.abs(safeAlpha - previousOrientationRef.current.alpha);
             const gyroMagnitude = Math.sqrt(gyroX * gyroX + gyroY * gyroY + gyroZ * gyroZ);
+            
+            console.log(`Gyroscope magnitude: ${gyroMagnitude}`);
             
             // Store gyroscope-like data
             setGyroscopeData(prev => {
               const newData = [...prev, gyroMagnitude];
-              console.log("Gyroscope data length:", newData.length);
+              console.log("Gyroscope data length:", newData.length, "Latest value:", gyroMagnitude);
               return newData;
             });
             
@@ -222,29 +213,78 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
             }
           }
           
-          // Magnetometer-like data from alpha
-          if (alpha !== null) {
-            const magnetoX = Math.cos((alpha * Math.PI) / 180);
-            const magnetoY = Math.sin((alpha * Math.PI) / 180);
-            const magnetoMagnitude = Math.sqrt(magnetoX * magnetoX + magnetoY * magnetoY);
+          // Enhanced magnetometer-like data from alpha with more realistic values
+          if (alpha !== null && alpha !== undefined) {
+            const magnetoX = Math.cos((safeAlpha * Math.PI) / 180) * 100; // Scale up for realistic values
+            const magnetoY = Math.sin((safeAlpha * Math.PI) / 180) * 100;
+            const magnetoZ = safeBeta * 0.5; // Use beta for Z component
+            const magnetoMagnitude = Math.sqrt(magnetoX * magnetoX + magnetoY * magnetoY + magnetoZ * magnetoZ);
+            
+            console.log(`Magnetometer magnitude: ${magnetoMagnitude}`);
             
             setMagnetometerData(prev => {
               const newData = [...prev, magnetoMagnitude];
-              console.log("Magnetometer data length:", newData.length);
+              console.log("Magnetometer data length:", newData.length, "Latest value:", magnetoMagnitude);
               return newData;
             });
             
-            setCurrentMagnetometer({ x: magnetoX, y: magnetoY, z: 0 });
+            setCurrentMagnetometer({ x: magnetoX, y: magnetoY, z: magnetoZ });
           }
           
           // Store current orientation for next gyro calculation
-          previousOrientationRef.current = { alpha: alpha || 0, beta: beta || 0, gamma: gamma || 0 };
+          previousOrientationRef.current = { alpha: safeAlpha, beta: safeBeta, gamma: safeGamma };
           
-          // Check for abnormal rotation
+          // Check for abnormal rotation - only if significantly above threshold
           if (rotationMagnitude > ROTATION_THRESHOLD) {
             abnormalReadingsCountRef.current += 1;
             console.log(`Abnormal rotation: ${rotationMagnitude.toFixed(3)}`);
           }
+          
+          // Create comprehensive sensor reading with all data
+          const newReading: SensorReading = {
+            timestamp,
+            acceleration: { 
+              x: currentAccel.x, 
+              y: currentAccel.y, 
+              z: currentAccel.z, 
+              magnitude: Math.sqrt(currentAccel.x * currentAccel.x + currentAccel.y * currentAccel.y + currentAccel.z * currentAccel.z)
+            },
+            orientation: { 
+              alpha: safeAlpha, 
+              beta: safeBeta, 
+              gamma: safeGamma, 
+              magnitude: rotationMagnitude 
+            },
+            gyroscope: previousOrientationRef.current ? {
+              x: Math.abs(safeBeta - (previousOrientationRef.current?.beta || 0)),
+              y: Math.abs(safeGamma - (previousOrientationRef.current?.gamma || 0)),
+              z: Math.abs(safeAlpha - (previousOrientationRef.current?.alpha || 0)),
+              magnitude: Math.sqrt(
+                Math.pow(Math.abs(safeBeta - (previousOrientationRef.current?.beta || 0)), 2) +
+                Math.pow(Math.abs(safeGamma - (previousOrientationRef.current?.gamma || 0)), 2) +
+                Math.pow(Math.abs(safeAlpha - (previousOrientationRef.current?.alpha || 0)), 2)
+              )
+            } : undefined,
+            magnetometer: alpha !== null ? {
+              x: Math.cos((safeAlpha * Math.PI) / 180) * 100,
+              y: Math.sin((safeAlpha * Math.PI) / 180) * 100,
+              z: safeBeta * 0.5,
+              magnitude: Math.sqrt(
+                Math.pow(Math.cos((safeAlpha * Math.PI) / 180) * 100, 2) +
+                Math.pow(Math.sin((safeAlpha * Math.PI) / 180) * 100, 2) +
+                Math.pow(safeBeta * 0.5, 2)
+              )
+            } : undefined
+          };
+          
+          lastReadingRef.current = newReading;
+          
+          // Store the raw data
+          setRawSensorData(prev => {
+            const newRawData = [...prev, newReading];
+            console.log("Raw sensor data length:", newRawData.length);
+            return newRawData;
+          });
         });
         
         console.log("Motion sensors started successfully");
@@ -264,11 +304,11 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
       const timeSinceLastMotion = Date.now() - lastMotionTimeRef.current;
       console.log(`Monitoring - Time since last motion: ${timeSinceLastMotion}ms, Total readings: ${readingsCountRef.current}`);
       
-      if (timeSinceLastMotion > 3000 && testStarted && !testCompleted) {
-        console.warn("Motion data stream interrupted");
-        toast.warning("Motion data stream interrupted. Keep your phone against your chest.");
+      if (timeSinceLastMotion > 5000 && testStarted && !testCompleted) {
+        console.warn("Motion data stream may be interrupted");
+        toast.warning("Motion data stream may be interrupted. Ensure your phone is active.");
       }
-    }, 2000);
+    }, 3000);
     
     return () => {
       console.log("Cleaning up sensor listeners...");

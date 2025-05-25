@@ -1,15 +1,27 @@
 import { StrokeDetectionResult } from "@/types";
 
-// Constants for balance detection sensitivity - adjusted for realistic medical detection
-export const ACCELERATION_THRESHOLD = 0.5; // Increased from 0.15 - normal walking has micro-movements
-export const ROTATION_THRESHOLD = 8.0;     // Increased from 1.5 - normal holding has small rotations
-export const GYROSCOPE_THRESHOLD = 10.0;   // Increased from 2.0 - more realistic for actual balance issues
-export const MAGNETOMETER_THRESHOLD = 25;  // Increased from 15 - normal movement variation
-export const SWAY_THRESHOLD = 0.8;         // Increased from 0.2 - significant sway detection
-export const UNSTABLE_STEP_THRESHOLD = 1.0; // Increased from 0.25 - actual unstable steps
-export const ABNORMAL_PERCENTAGE_THRESHOLD = 15; // Increased from 2% to 15% - more realistic
-export const MIN_READINGS_REQUIRED = 5;    // Keep same - minimum readings required for valid test
-export const TEST_DURATION = 15;           // Keep same - 15 seconds test duration
+// Constants for balance detection sensitivity - ADJUSTABLE THRESHOLDS
+// To manually adjust sensitivity, modify these values:
+// - HIGHER values = LESS sensitive (fewer false positives)
+// - LOWER values = MORE sensitive (may cause false positives)
+
+export const ACCELERATION_THRESHOLD = 2.0; // Further increased - only detect significant acceleration changes
+export const ROTATION_THRESHOLD = 15.0;     // Further increased - only detect significant rotations
+export const GYROSCOPE_THRESHOLD = 20.0;   // Further increased - only detect significant gyroscope changes
+export const MAGNETOMETER_THRESHOLD = 50;  // Further increased - only detect significant magnetic changes
+export const SWAY_THRESHOLD = 1.5;         // Further increased - only detect significant sway
+export const UNSTABLE_STEP_THRESHOLD = 2.0; // Further increased - only detect clearly unstable steps
+export const ABNORMAL_PERCENTAGE_THRESHOLD = 25; // Further increased to 25% - much more conservative
+export const MIN_READINGS_REQUIRED = 5;    // Minimum readings required for valid test
+export const TEST_DURATION = 15;           // 15 seconds test duration
+
+// Manual threshold adjustment guide:
+// For LESS sensitivity (fewer alerts): INCREASE these values
+// For MORE sensitivity (more alerts): DECREASE these values
+// Recommended ranges:
+// - ACCELERATION_THRESHOLD: 0.5 - 5.0 (current: 2.0)
+// - ROTATION_THRESHOLD: 5.0 - 30.0 (current: 15.0)
+// - ABNORMAL_PERCENTAGE_THRESHOLD: 10 - 50 (current: 25)
 
 export interface SensorReading {
   timestamp: number;
@@ -109,9 +121,15 @@ export const createDetailedExplanation = (
   rotationVariability: number, 
   magnetoVariability: number,
   balanceResult: 'normal' | 'abnormal',
-  movementPatterns: any
+  movementPatterns: any,
+  hasValidSensorData: boolean
 ): string => {
   let detailedExplanation = `Analyzed ${totalReadings} motion readings over 15 seconds.\n`;
+  
+  // Check if we have valid sensor data
+  if (!hasValidSensorData) {
+    detailedExplanation += `Warning: Limited sensor data detected. Some readings may be incomplete.\n`;
+  }
   
   if (balanceResult === 'abnormal') {
     detailedExplanation += `${abnormalPercentage.toFixed(1)}% of readings showed balance irregularities.\n`;
@@ -223,7 +241,46 @@ export const analyzeBalanceData = (
     };
   }
   
-  // Analyze the collected data with more realistic medical-grade sensitivity
+  // Check for valid sensor data - if all values are zero, it indicates sensor issues
+  const hasValidAccelData = accelerationData.some(val => val > 0.1);
+  const hasValidRotationData = rotationData.some(val => val > 0.1);
+  const hasValidMagnetoData = magnetometerData.some(val => val > 0.1);
+  const hasValidSensorData = hasValidAccelData || hasValidRotationData || hasValidMagnetoData;
+  
+  console.log("Sensor data validation:", {
+    hasValidAccelData,
+    hasValidRotationData, 
+    hasValidMagnetoData,
+    hasValidSensorData,
+    accelSample: accelerationData.slice(0, 5),
+    rotationSample: rotationData.slice(0, 5),
+    magnetoSample: magnetometerData.slice(0, 5)
+  });
+  
+  // If we don't have valid sensor data, return inconclusive
+  if (!hasValidSensorData) {
+    return {
+      detectionType: 'balance',
+      result: 'inconclusive',
+      timestamp: new Date(),
+      details: `Sensor data appears to be invalid or unavailable. All readings are near zero, which may indicate sensor permission issues or device limitations.`,
+      sensorData: {
+        accelerometer: accelerationData,
+        gyroscope: [...rotationData, ...gyroscopeData],
+        magnetometer: magnetometerData,
+        abnormalReadingsPercentage: 0,
+        variability: {
+          acceleration: 0,
+          rotation: 0,
+          magnetic: 0
+        },
+        rawData: rawSensorData,
+        connectionStatus: 'error'
+      }
+    };
+  }
+  
+  // Analyze the collected data with conservative medical-grade sensitivity
   const abnormalReadings = abnormalReadingsCount;
   const abnormalPercentage = (abnormalReadings / readingsCount) * 100;
   
@@ -235,22 +292,22 @@ export const analyzeBalanceData = (
   // Detect specific movement patterns
   const movementPatterns = detectMovementPatterns(rawSensorData);
   
-  // More realistic detection logic - adjusted thresholds for actual balance issues
+  // Conservative detection logic - much higher thresholds to reduce false positives
   const hasAbnormalPercentage = abnormalPercentage > ABNORMAL_PERCENTAGE_THRESHOLD;
-  const hasHighAccelVariability = accelVariability > 1.2; // Increased from 0.3 - significant variability
-  const hasHighRotationVariability = rotationVariability > 15; // Increased from 3 - significant rotation issues
-  const hasHighMagnetoVariability = magnetoVariability > 30; // Increased from 10 - significant magnetic variation
+  const hasHighAccelVariability = accelVariability > 3.0; // Much higher threshold
+  const hasHighRotationVariability = rotationVariability > 25; // Much higher threshold  
+  const hasHighMagnetoVariability = magnetoVariability > 50; // Much higher threshold
   
-  // Check for specific movement pattern issues - more conservative thresholds
-  const hasSwayIssues = movementPatterns.swayForwardBackward > 8; // Increased from 2
-  const hasUnstableSteps = movementPatterns.unstableSteps > 10; // Increased from 3
-  const hasSuddenMovements = movementPatterns.suddenMovements > 6; // Increased from 2
-  const hasLinearIssues = movementPatterns.linearMovementIssues > 8; // Increased from 2
+  // Check for specific movement pattern issues - very conservative thresholds
+  const hasSwayIssues = movementPatterns.swayForwardBackward > 15; // Much higher
+  const hasUnstableSteps = movementPatterns.unstableSteps > 20; // Much higher
+  const hasSuddenMovements = movementPatterns.suddenMovements > 10; // Much higher
+  const hasLinearIssues = movementPatterns.linearMovementIssues > 15; // Much higher
   
-  // Only flag as abnormal if significant issues detected - removed force abnormal
-  const forceAbnormal = abnormalReadings > 20; // Increased from 3 - much higher threshold
+  // Only flag as abnormal if very significant issues detected
+  const forceAbnormal = abnormalReadings > 50; // Much higher threshold
   
-  // Determine result with improved medical-grade sensitivity
+  // Determine result with very conservative medical-grade sensitivity
   const balanceResult = (hasAbnormalPercentage || hasHighAccelVariability || 
                         hasHighRotationVariability || hasHighMagnetoVariability || 
                         hasSwayIssues || hasUnstableSteps || hasSuddenMovements ||
@@ -268,7 +325,8 @@ export const analyzeBalanceData = (
     rotationVariability,
     magnetoVariability,
     balanceResult,
-    movementPatterns
+    movementPatterns,
+    hasValidSensorData
   );
   
   // Return the test result
