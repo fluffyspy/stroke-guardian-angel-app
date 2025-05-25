@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +13,7 @@ import { useSensorData } from "./balance/useSensorData";
 import { InstructionsScreen } from "./balance/InstructionsScreen";
 import { LiveTestScreen } from "./balance/LiveTestScreen";
 import { ResultScreen } from "./balance/ResultScreen";
+import { SensorDiagnostics } from "./balance/SensorDiagnostics";
 
 const BalanceTest = () => {
   const navigate = useNavigate();
@@ -20,6 +22,8 @@ const BalanceTest = () => {
   const [timer, setTimer] = useState(TEST_DURATION);
   const [result, setResult] = useState<StrokeDetectionResult | null>(null);
   const [instructionsRead, setInstructionsRead] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [permissionsGranted, setPermissionsGranted] = useState(false);
   
   // Use ref to store interval ID for proper cleanup
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -54,6 +58,7 @@ const BalanceTest = () => {
   const startTest = () => {
     if (!sensorAvailable) {
       toast.error("Cannot start test without motion sensors");
+      setShowDiagnostics(true);
       return;
     }
     
@@ -129,18 +134,40 @@ const BalanceTest = () => {
     setResult(null);
     resetSensorData();
     setInstructionsRead(false);
+    setShowDiagnostics(false);
     
     console.log("Test reset");
+  };
+
+  const handlePermissionsGranted = () => {
+    setPermissionsGranted(true);
+    setShowDiagnostics(false);
+    toast.success("Sensors are ready! You can now start the balance test.");
   };
 
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-primary">Balance Test</h1>
-        <Button variant="outline" onClick={() => navigate("/dashboard")}>
-          Back to Dashboard
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setShowDiagnostics(!showDiagnostics)}
+          >
+            {showDiagnostics ? "Hide" : "Show"} Diagnostics
+          </Button>
+          <Button variant="outline" onClick={() => navigate("/dashboard")}>
+            Back to Dashboard
+          </Button>
+        </div>
       </div>
+
+      {showDiagnostics && (
+        <div className="mb-6">
+          <SensorDiagnostics onPermissionsGranted={handlePermissionsGranted} />
+        </div>
+      )}
 
       <Card className="mb-6">
         <CardHeader>
