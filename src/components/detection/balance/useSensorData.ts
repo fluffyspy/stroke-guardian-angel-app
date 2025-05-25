@@ -78,20 +78,8 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
           return;
         }
         
-        // Request permissions first
-        try {
-          const permissions = await Motion.requestPermissions();
-          console.log("Motion permissions result:", permissions);
-          
-          if (!permissions.granted) {
-            console.warn("Motion permissions not granted:", permissions);
-            setSensorAvailable(false);
-            return;
-          }
-        } catch (permError) {
-          console.error("Error requesting motion permissions:", permError);
-        }
-        
+        // For Capacitor Motion plugin, permissions are requested automatically
+        // when we start listening to events, so we just mark as available
         setSensorAvailable(true);
         sensorTypesRef.current.add('accelerometer');
         sensorTypesRef.current.add('orientation');

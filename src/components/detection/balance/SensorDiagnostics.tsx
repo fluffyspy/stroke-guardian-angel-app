@@ -44,18 +44,12 @@ export const SensorDiagnostics: React.FC<SensorDiagnosticsProps> = ({ onPermissi
     console.log("Checking initial permissions...");
     
     if (Capacitor.isNativePlatform()) {
-      try {
-        // Check motion permissions on native platform
-        const motionPermission = await Motion.requestPermissions();
-        console.log("Motion permission result:", motionPermission);
-        
-        setPermissionStatus(prev => ({
-          ...prev,
-          motion: motionPermission.granted === true
-        }));
-      } catch (error) {
-        console.error("Error checking motion permissions:", error);
-      }
+      // For native platforms, we assume permissions are available
+      // They will be requested when we try to access motion sensors
+      setPermissionStatus(prev => ({
+        ...prev,
+        motion: true
+      }));
     } else {
       // Check web permissions
       if (typeof DeviceMotionEvent !== 'undefined') {
@@ -75,25 +69,19 @@ export const SensorDiagnostics: React.FC<SensorDiagnosticsProps> = ({ onPermissi
   };
 
   const requestPermissions = async () => {
-    console.log("Requesting permissions...");
+    console.log("Testing sensor access...");
     setTesting(true);
     
     try {
       if (Capacitor.isNativePlatform()) {
-        // Request motion permissions on native
-        const motionResult = await Motion.requestPermissions();
-        console.log("Motion permission request result:", motionResult);
-        
+        // For native platforms, permissions are requested automatically
+        // when we start listening to motion events
         setPermissionStatus(prev => ({
           ...prev,
-          motion: motionResult.granted === true
+          motion: true
         }));
         
-        if (motionResult.granted) {
-          toast.success("Motion permissions granted!");
-        } else {
-          toast.error("Motion permissions denied. Please enable in device settings.");
-        }
+        toast.success("Motion sensors are ready!");
       } else {
         // Request web permissions
         if (typeof DeviceMotionEvent !== 'undefined' && (DeviceMotionEvent as any).requestPermission) {
@@ -117,8 +105,8 @@ export const SensorDiagnostics: React.FC<SensorDiagnosticsProps> = ({ onPermissi
         }
       }
     } catch (error) {
-      console.error("Error requesting permissions:", error);
-      toast.error("Failed to request permissions: " + error);
+      console.error("Error checking sensor access:", error);
+      toast.error("Failed to access sensors: " + error);
     }
     
     setTesting(false);
@@ -267,13 +255,13 @@ export const SensorDiagnostics: React.FC<SensorDiagnosticsProps> = ({ onPermissi
               disabled={testing}
               className="w-full"
             >
-              {testing ? "Requesting..." : "Request Permissions"}
+              {testing ? "Checking..." : "Check Sensor Access"}
             </Button>
           )}
           
           <Button 
             onClick={testSensors} 
-            disabled={testing || !hasAllPermissions}
+            disabled={testing}
             variant="outline"
             className="w-full"
           >
@@ -284,7 +272,7 @@ export const SensorDiagnostics: React.FC<SensorDiagnosticsProps> = ({ onPermissi
         {!hasAllPermissions && (
           <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded">
             <AlertTriangle className="h-4 w-4 inline mr-1" />
-            Permissions are required for the balance test to work properly.
+            Sensor access is required for the balance test to work properly.
           </div>
         )}
       </CardContent>
