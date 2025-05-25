@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from 'react';
 import { Motion } from '@capacitor/motion';
 import { toast } from 'sonner';
@@ -125,20 +126,15 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
           const { x, y, z } = event.acceleration;
           const timestamp = Date.now();
           
-          // More detailed logging
-          console.log(`Raw accel data: x=${x.toFixed(4)}, y=${y.toFixed(4)}, z=${z.toFixed(4)}, timestamp=${timestamp}`);
-          
-          // Check if we're getting actual motion data
+          // Calculate magnitude
           const magnitude = Math.sqrt(x * x + y * y + z * z);
-          console.log(`Acceleration magnitude: ${magnitude.toFixed(4)}`);
           
-          // Only consider it valid motion if magnitude is above a very small threshold
-          if (magnitude > 0.01) {
+          console.log(`Accel: x=${x.toFixed(3)}, y=${y.toFixed(3)}, z=${z.toFixed(3)}, mag=${magnitude.toFixed(3)}`);
+          
+          // Consider motion if magnitude is reasonable (including gravity ~9.8)
+          if (magnitude > 0.5) { // Much more lenient threshold
             hasMotionRef.current = true;
             lastMotionTimeRef.current = timestamp;
-            console.log("Valid motion detected!");
-          } else {
-            console.warn("Motion reading too small, might be sensor issue");
           }
           
           // Set current values for display
@@ -147,17 +143,16 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
           // Store acceleration data - use magnitude
           setAccelerationData(prev => {
             const newData = [...prev, magnitude];
-            console.log("Acceleration data length:", newData.length, "Latest value:", magnitude.toFixed(4));
             return newData;
           });
           
           // Increment total readings counter
           readingsCountRef.current += 1;
           
-          // Count abnormal readings - only if magnitude is significantly above threshold
-          if (magnitude > ACCELERATION_THRESHOLD) {
+          // Count abnormal readings based on deviation from gravity baseline
+          const gravityDeviation = Math.abs(magnitude - 9.8); // Deviation from standard gravity
+          if (gravityDeviation > ACCELERATION_THRESHOLD) {
             abnormalReadingsCountRef.current += 1;
-            console.log(`Abnormal acceleration detected: ${magnitude.toFixed(4)}, total abnormal: ${abnormalReadingsCountRef.current}`);
           }
           
           // Update debug info
@@ -174,9 +169,6 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
         orientationListenerRef.current = await Motion.addListener('orientation', (event) => {
           const { alpha, beta, gamma } = event;
           const timestamp = Date.now();
-          
-          // More detailed logging
-          console.log(`Raw orientation: α=${alpha}, β=${beta}, γ=${gamma}, timestamp=${timestamp}`);
           
           hasMotionRef.current = true;
           lastMotionTimeRef.current = timestamp;
@@ -195,12 +187,9 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
             safeGamma * safeGamma
           );
           
-          console.log(`Rotation magnitude: ${rotationMagnitude.toFixed(4)}`);
-          
           // Store rotation data
           setRotationData(prev => {
             const newData = [...prev, rotationMagnitude];
-            console.log("Rotation data length:", newData.length, "Latest value:", rotationMagnitude.toFixed(4));
             return newData;
           });
           
@@ -211,12 +200,9 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
             const gyroZ = Math.abs(safeAlpha - previousOrientationRef.current.alpha);
             const gyroMagnitude = Math.sqrt(gyroX * gyroX + gyroY * gyroY + gyroZ * gyroZ);
             
-            console.log(`Gyroscope magnitude: ${gyroMagnitude.toFixed(4)}`);
-            
             // Store gyroscope-like data
             setGyroscopeData(prev => {
               const newData = [...prev, gyroMagnitude];
-              console.log("Gyroscope data length:", newData.length, "Latest value:", gyroMagnitude.toFixed(4));
               return newData;
             });
             
@@ -226,22 +212,18 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
             // Check for abnormal gyroscope-like readings
             if (gyroMagnitude > GYROSCOPE_THRESHOLD) {
               abnormalReadingsCountRef.current += 1;
-              console.log(`Abnormal gyroscope reading: ${gyroMagnitude.toFixed(4)}`);
             }
           }
           
           // Enhanced magnetometer-like data from alpha with more realistic values
           if (alpha !== null && alpha !== undefined) {
-            const magnetoX = Math.cos((safeAlpha * Math.PI) / 180) * 100;
-            const magnetoY = Math.sin((safeAlpha * Math.PI) / 180) * 100;
-            const magnetoZ = safeBeta * 0.5;
+            const magnetoX = Math.cos((safeAlpha * Math.PI) / 180) * 50;
+            const magnetoY = Math.sin((safeAlpha * Math.PI) / 180) * 50;
+            const magnetoZ = safeBeta * 0.3;
             const magnetoMagnitude = Math.sqrt(magnetoX * magnetoX + magnetoY * magnetoY + magnetoZ * magnetoZ);
-            
-            console.log(`Magnetometer magnitude: ${magnetoMagnitude.toFixed(4)}`);
             
             setMagnetometerData(prev => {
               const newData = [...prev, magnetoMagnitude];
-              console.log("Magnetometer data length:", newData.length, "Latest value:", magnetoMagnitude.toFixed(4));
               return newData;
             });
             
@@ -251,13 +233,12 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
           // Store current orientation for next gyro calculation
           previousOrientationRef.current = { alpha: safeAlpha, beta: safeBeta, gamma: safeGamma };
           
-          // Check for abnormal rotation - only if significantly above threshold
+          // Check for abnormal rotation
           if (rotationMagnitude > ROTATION_THRESHOLD) {
             abnormalReadingsCountRef.current += 1;
-            console.log(`Abnormal rotation: ${rotationMagnitude.toFixed(4)}`);
           }
           
-          // Create comprehensive sensor reading with all data
+          // Create comprehensive sensor reading
           const newReading: SensorReading = {
             timestamp,
             acceleration: { 
@@ -283,13 +264,13 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
               )
             } : undefined,
             magnetometer: alpha !== null ? {
-              x: Math.cos((safeAlpha * Math.PI) / 180) * 100,
-              y: Math.sin((safeAlpha * Math.PI) / 180) * 100,
-              z: safeBeta * 0.5,
+              x: Math.cos((safeAlpha * Math.PI) / 180) * 50,
+              y: Math.sin((safeAlpha * Math.PI) / 180) * 50,
+              z: safeBeta * 0.3,
               magnitude: Math.sqrt(
-                Math.pow(Math.cos((safeAlpha * Math.PI) / 180) * 100, 2) +
-                Math.pow(Math.sin((safeAlpha * Math.PI) / 180) * 100, 2) +
-                Math.pow(safeBeta * 0.5, 2)
+                Math.pow(Math.cos((safeAlpha * Math.PI) / 180) * 50, 2) +
+                Math.pow(Math.sin((safeAlpha * Math.PI) / 180) * 50, 2) +
+                Math.pow(safeBeta * 0.3, 2)
               )
             } : undefined
           };
@@ -299,27 +280,12 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
           // Store the raw data
           setRawSensorData(prev => {
             const newRawData = [...prev, newReading];
-            console.log("Raw sensor data length:", newRawData.length);
             return newRawData;
           });
         });
         
         console.log("Motion sensors started successfully");
-        toast.success("Motion sensors activated - checking data quality...");
-        
-        // Set up a data quality check after 3 seconds
-        setTimeout(() => {
-          if (readingsCountRef.current === 0) {
-            console.error("No sensor readings after 3 seconds - sensor may not be working");
-            toast.error("No sensor data detected. Please check device permissions and capabilities.");
-          } else if (readingsCountRef.current < 10) {
-            console.warn("Low sensor reading rate:", readingsCountRef.current);
-            toast.warning("Low sensor reading rate detected. Results may be inaccurate.");
-          } else {
-            console.log("Sensor data quality check passed:", readingsCountRef.current, "readings");
-            toast.success("Sensors working properly!");
-          }
-        }, 3000);
+        toast.success("Motion sensors activated!");
         
       } catch (error) {
         console.error("Error starting sensors:", error);
@@ -330,28 +296,8 @@ export const useSensorData = (testStarted: boolean, testCompleted: boolean): Use
     
     startSensors();
     
-    // Set up monitoring for data flow
-    const monitoringInterval = setInterval(() => {
-      const timeSinceLastMotion = Date.now() - lastMotionTimeRef.current;
-      console.log(`Monitoring - Time since last motion: ${timeSinceLastMotion}ms, Total readings: ${readingsCountRef.current}, Has motion: ${hasMotionRef.current}`);
-      
-      if (timeSinceLastMotion > 5000 && testStarted && !testCompleted) {
-        console.warn("Motion data stream may be interrupted");
-        toast.warning("Motion data stream may be interrupted. Try moving the device.");
-      }
-      
-      // Log current sensor values for debugging
-      console.log("Current sensor values:", {
-        accel: currentAccel,
-        rotation: currentRotation,
-        gyro: currentGyro,
-        magnetometer: currentMagnetometer
-      });
-    }, 3000);
-    
     return () => {
       console.log("Cleaning up sensor listeners...");
-      clearInterval(monitoringInterval);
       
       if (accelListenerRef.current) {
         accelListenerRef.current.remove();
