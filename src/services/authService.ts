@@ -1,9 +1,6 @@
 
 import { Patient } from "@/types";
-
-// Mock API endpoint for local development
-// In a real app, this would be replaced with actual backend endpoints
-const API_BASE_URL = "http://localhost:5000/api";
+import { authAPI, userAPI, UserCreate, UserOut, EmergencyContact as APIEmergencyContact } from "./apiService";
 
 // Interface for login credentials
 interface LoginCredentials {
@@ -16,19 +13,57 @@ interface RegistrationData extends Patient {
   password: string;
 }
 
+// Helper function to convert API emergency contact to local type
+const convertEmergencyContact = (apiContact: APIEmergencyContact) => ({
+  id: `${Date.now()}-${Math.random()}`, // Generate local ID
+  name: apiContact.name,
+  relationship: apiContact.relation,
+  phoneNumber: apiContact.phone
+});
+
+// Helper function to convert local emergency contact to API type
+const convertToAPIEmergencyContact = (localContact: any): APIEmergencyContact => ({
+  name: localContact.name,
+  relation: localContact.relationship,
+  phone: localContact.phoneNumber
+});
+
+// Helper function to convert API user to local Patient type
+const convertUserToPatient = (apiUser: UserOut): Patient => ({
+  id: apiUser._id || undefined,
+  name: apiUser.name,
+  email: apiUser.email,
+  age: 0, // These fields aren't in the API schema, so we set defaults
+  height: 0,
+  weight: 0,
+  medicalHistory: "",
+  emergencyContacts: apiUser.emergency_contacts.map(convertEmergencyContact)
+});
+
 // Check if user is already logged in
 export const checkUserSession = async (): Promise<Patient | null> => {
   try {
-    // Check if there's patient data in localStorage
     const storedPatient = localStorage.getItem("patient");
     const token = localStorage.getItem("authToken");
+    const userId = localStorage.getItem("userId");
     
-    if (!storedPatient || !token) {
+    if (!storedPatient || !token || !userId) {
       return null;
     }
     
-    // For now, simply return the stored patient data
-    return JSON.parse(storedPatient);
+    // Try to fetch fresh user data from the backend
+    try {
+      const apiUser = await userAPI.getUser(userId);
+      const patient = convertUserToPatient(apiUser);
+      
+      // Update stored patient data with fresh data
+      localStorage.setItem("patient", JSON.stringify(patient));
+      return patient;
+    } catch (error) {
+      console.error("Failed to fetch fresh user data:", error);
+      // Fall back to stored data if API call fails
+      return JSON.parse(storedPatient);
+    }
   } catch (error) {
     console.error("Session validation error:", error);
     return null;
@@ -38,31 +73,40 @@ export const checkUserSession = async (): Promise<Patient | null> => {
 // Login user with email and password
 export const loginUser = async (credentials: LoginCredentials): Promise<Patient> => {
   try {
-    // For demo purposes, we'll just check the localStorage
-    const users = JSON.parse(localStorage.getItem("users") || "[]");
+    // Call the backend login API
+    const loginResponse = await authAPI.login({
+      email: credentials.email,
+      password: credentials.password
+    });
     
-    // Find user with matching email
-    const user = users.find((u: {email: string, password: string, patient: Patient}) => 
-      u.email === credentials.email
-    );
+    // The login response should contain user data and token
+    // Adjust this based on your actual backend response structure
+    let user: UserOut;
+    let token: string;
     
-    if (!user) {
-      throw new Error("User not found. Please register first.");
+    if (loginResponse.user && loginResponse.token) {
+      user = loginResponse.user;
+      token = loginResponse.token;
+    } else if (loginResponse.access_token) {
+      // If token is returned but user data isn't, fetch user data separately
+      token = loginResponse.access_token;
+      // You might need to decode the token to get user ID or make another API call
+      // For now, we'll assume the response includes user data
+      user = loginResponse.user || loginResponse;
+    } else {
+      // Handle case where login response format is different
+      token = `backend-token-${Date.now()}`;
+      user = loginResponse;
     }
     
-    // Check password (IMPORTANT: In a real app, this would use proper hashing)
-    if (user.password !== credentials.password) {
-      throw new Error("Invalid password.");
-    }
+    const patient = convertUserToPatient(user);
     
-    // Create a mock token
-    const token = `mock-jwt-token-${Date.now()}`;
-    
-    // Store auth token and user data
+    // Store auth data
     localStorage.setItem("authToken", token);
-    localStorage.setItem("patient", JSON.stringify(user.patient));
+    localStorage.setItem("userId", user._id || '');
+    localStorage.setItem("patient", JSON.stringify(patient));
     
-    return user.patient;
+    return patient;
   } catch (error) {
     console.error("Login error:", error);
     throw error;
@@ -72,41 +116,32 @@ export const loginUser = async (credentials: LoginCredentials): Promise<Patient>
 // Register new user
 export const registerUser = async (userData: RegistrationData): Promise<Patient> => {
   try {
-    const { password, ...patientData } = userData;
+    const { password, age, height, weight, medicalHistory, ...patientData } = userData;
     
-    // Add an ID to the patient
-    const patient = {
-      ...patientData,
-      id: `user-${Date.now()}`
-    };
+    // Convert emergency contacts to API format
+    const apiEmergencyContacts = userData.emergencyContacts.map(convertToAPIEmergencyContact);
     
-    // Create a user object
-    const user = {
-      email: patient.email,
+    // Create user data for API
+    const apiUserData: UserCreate = {
+      name: patientData.name,
+      email: patientData.email,
       password,
-      patient
+      role: 'patient',
+      emergency_contacts: apiEmergencyContacts
     };
     
-    // Get existing users or initialize empty array
-    const existingUsers = JSON.parse(localStorage.getItem("users") || "[]");
+    // Call the backend signup API
+    const apiUser = await authAPI.signup(apiUserData);
     
-    // Check if email already exists
-    const emailExists = existingUsers.some((u: {email: string}) => u.email === patient.email);
-    if (emailExists) {
-      throw new Error("Email already registered. Please login instead.");
-    }
+    const patient = convertUserToPatient(apiUser);
     
-    // Add new user to the array
-    const users = [...existingUsers, user];
+    // For now, create a mock token since the signup response might not include one
+    // Adjust this based on your actual backend response
+    const token = `backend-token-${Date.now()}`;
     
-    // Store in localStorage
-    localStorage.setItem("users", JSON.stringify(users));
-    
-    // Create a mock token
-    const token = `mock-jwt-token-${Date.now()}`;
-    
-    // Store auth token and user data
+    // Store auth data
     localStorage.setItem("authToken", token);
+    localStorage.setItem("userId", apiUser._id || '');
     localStorage.setItem("patient", JSON.stringify(patient));
     
     return patient;
@@ -120,16 +155,52 @@ export const registerUser = async (userData: RegistrationData): Promise<Patient>
 export const logoutUser = async (): Promise<void> => {
   // Clear local storage
   localStorage.removeItem("authToken");
+  localStorage.removeItem("userId");
   localStorage.removeItem("patient");
 };
 
 // Get user data
 export const getUserData = async (): Promise<Patient> => {
   const patientData = localStorage.getItem("patient");
+  const userId = localStorage.getItem("userId");
   
-  if (!patientData) {
+  if (!patientData || !userId) {
     throw new Error("Not authenticated");
   }
   
-  return JSON.parse(patientData);
+  try {
+    // Try to get fresh data from backend
+    const apiUser = await userAPI.getUser(userId);
+    const patient = convertUserToPatient(apiUser);
+    
+    // Update stored data
+    localStorage.setItem("patient", JSON.stringify(patient));
+    return patient;
+  } catch (error) {
+    console.error("Failed to fetch fresh user data:", error);
+    // Fall back to stored data
+    return JSON.parse(patientData);
+  }
+};
+
+// Update user data
+export const updateUserData = async (userId: string, updateData: Partial<Patient>): Promise<Patient> => {
+  try {
+    const apiUpdateData: any = {};
+    
+    if (updateData.name) apiUpdateData.name = updateData.name;
+    if (updateData.emergencyContacts) {
+      apiUpdateData.emergency_contacts = updateData.emergencyContacts.map(convertToAPIEmergencyContact);
+    }
+    
+    const updatedUser = await userAPI.updateUser(userId, apiUpdateData);
+    const patient = convertUserToPatient(updatedUser);
+    
+    // Update stored data
+    localStorage.setItem("patient", JSON.stringify(patient));
+    return patient;
+  } catch (error) {
+    console.error("Update user error:", error);
+    throw error;
+  }
 };
