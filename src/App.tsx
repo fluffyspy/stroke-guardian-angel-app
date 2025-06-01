@@ -4,7 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
@@ -18,6 +18,7 @@ import SpeechTest from "./components/detection/SpeechTest";
 import Emergency from "./components/Emergency";
 import StrokeEducation from "./components/education/StrokeEducation";
 import ComprehensiveAnalysis from "./components/analysis/ComprehensiveAnalysis";
+import PermissionsHandler from "./components/PermissionsHandler";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -86,6 +87,16 @@ const BackButtonHandler = () => {
 };
 
 const AppContent = () => {
+  const [permissionsGranted, setPermissionsGranted] = useState(false);
+
+  const handlePermissionsGranted = () => {
+    setPermissionsGranted(true);
+  };
+
+  if (!permissionsGranted) {
+    return <PermissionsHandler onPermissionsGranted={handlePermissionsGranted} />;
+  }
+
   return (
     <>
       <Toaster />
