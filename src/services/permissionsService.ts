@@ -1,6 +1,21 @@
 
-import { Permissions } from '@capacitor/permissions';
 import { Capacitor } from '@capacitor/core';
+
+// Conditional import for Capacitor Permissions
+let Permissions: any = null;
+
+// Try to import Permissions, but handle gracefully if not available
+try {
+  if (Capacitor.isNativePlatform()) {
+    import('@capacitor/permissions').then(module => {
+      Permissions = module.Permissions;
+    }).catch(error => {
+      console.warn('Permissions plugin not available:', error);
+    });
+  }
+} catch (error) {
+  console.warn('Failed to load permissions module:', error);
+}
 
 export interface PermissionStatus {
   camera: boolean;
@@ -12,8 +27,8 @@ export interface PermissionStatus {
 class PermissionsService {
   async checkPermissions(): Promise<PermissionStatus> {
     try {
-      if (!Capacitor.isNativePlatform()) {
-        // On web, assume permissions are granted
+      if (!Capacitor.isNativePlatform() || !Permissions) {
+        // On web or when permissions plugin is not available, assume permissions are granted
         return {
           camera: true,
           microphone: true,
@@ -47,7 +62,7 @@ class PermissionsService {
 
   async requestAllPermissions(): Promise<PermissionStatus> {
     try {
-      if (!Capacitor.isNativePlatform()) {
+      if (!Capacitor.isNativePlatform() || !Permissions) {
         return {
           camera: true,
           microphone: true,
@@ -76,7 +91,7 @@ class PermissionsService {
 
   async requestCameraPermission(): Promise<boolean> {
     try {
-      if (!Capacitor.isNativePlatform()) return true;
+      if (!Capacitor.isNativePlatform() || !Permissions) return true;
       
       const result = await Permissions.requestPermissions({ permissions: ['camera'] });
       return result.camera === 'granted';
@@ -88,7 +103,7 @@ class PermissionsService {
 
   async requestMicrophonePermission(): Promise<boolean> {
     try {
-      if (!Capacitor.isNativePlatform()) return true;
+      if (!Capacitor.isNativePlatform() || !Permissions) return true;
       
       const result = await Permissions.requestPermissions({ permissions: ['microphone'] });
       return result.microphone === 'granted';
