@@ -1,9 +1,11 @@
-
 import { StrokeDetectionResult } from "@/types";
 import { detectionAPI, SensorData } from "@/services/apiService";
 
 // Define constants for thresholds and test duration
 export const TEST_DURATION = 15; // Test duration in seconds
+export const ACCELERATION_THRESHOLD = 2.0; // Threshold for acceleration changes
+export const ROTATION_THRESHOLD = 10.0; // Threshold for rotation changes
+export const GYROSCOPE_THRESHOLD = 5.0; // Threshold for gyroscope changes
 
 // Define interfaces for sensor data
 export interface SensorReading {
