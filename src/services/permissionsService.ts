@@ -1,22 +1,6 @@
 
 import { Capacitor } from '@capacitor/core';
 
-// Conditional import for Capacitor Permissions
-let Permissions: any = null;
-
-// Try to import Permissions, but handle gracefully if not available
-try {
-  if (Capacitor.isNativePlatform()) {
-    import('@capacitor/permissions').then(module => {
-      Permissions = module.Permissions;
-    }).catch(error => {
-      console.warn('Permissions plugin not available:', error);
-    });
-  }
-} catch (error) {
-  console.warn('Failed to load permissions module:', error);
-}
-
 export interface PermissionStatus {
   camera: boolean;
   microphone: boolean;
@@ -27,27 +11,18 @@ export interface PermissionStatus {
 class PermissionsService {
   async checkPermissions(): Promise<PermissionStatus> {
     try {
-      if (!Capacitor.isNativePlatform() || !Permissions) {
-        // On web or when permissions plugin is not available, assume permissions are granted
-        return {
-          camera: true,
-          microphone: true,
-          storage: true,
-          motion: true
-        };
+      if (!Capacitor.isNativePlatform()) {
+        // On web, check browser permissions API when available
+        return await this.checkWebPermissions();
       }
 
-      const [camera, microphone, storage] = await Promise.all([
-        Permissions.checkPermissions({ permissions: ['camera'] }),
-        Permissions.checkPermissions({ permissions: ['microphone'] }),
-        Permissions.checkPermissions({ permissions: ['storage'] })
-      ]);
-
+      // For native platforms, assume permissions are available
+      // They will be requested when we try to access the actual features
       return {
-        camera: camera.camera === 'granted',
-        microphone: microphone.microphone === 'granted',
-        storage: storage.storage === 'granted',
-        motion: true // Motion permissions are usually granted by default
+        camera: true,
+        microphone: true,
+        storage: true,
+        motion: true
       };
     } catch (error) {
       console.error('Error checking permissions:', error);
@@ -60,9 +35,33 @@ class PermissionsService {
     }
   }
 
+  private async checkWebPermissions(): Promise<PermissionStatus> {
+    const permissions: PermissionStatus = {
+      camera: true,
+      microphone: true,
+      storage: true,
+      motion: true
+    };
+
+    if ('permissions' in navigator) {
+      try {
+        const cameraPermission = await navigator.permissions.query({ name: 'camera' as PermissionName });
+        permissions.camera = cameraPermission.state === 'granted';
+
+        const micPermission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        permissions.microphone = micPermission.state === 'granted';
+      } catch (error) {
+        console.warn('Browser permissions API not fully supported:', error);
+      }
+    }
+
+    return permissions;
+  }
+
   async requestAllPermissions(): Promise<PermissionStatus> {
     try {
-      if (!Capacitor.isNativePlatform() || !Permissions) {
+      if (!Capacitor.isNativePlatform()) {
+        // On web, permissions are requested when accessing media
         return {
           camera: true,
           microphone: true,
@@ -71,16 +70,11 @@ class PermissionsService {
         };
       }
 
-      const [camera, microphone, storage] = await Promise.all([
-        Permissions.requestPermissions({ permissions: ['camera'] }),
-        Permissions.requestPermissions({ permissions: ['microphone'] }),
-        Permissions.requestPermissions({ permissions: ['storage'] })
-      ]);
-
+      // For native platforms, return true - permissions will be requested by the actual features
       return {
-        camera: camera.camera === 'granted',
-        microphone: microphone.microphone === 'granted',
-        storage: storage.storage === 'granted',
+        camera: true,
+        microphone: true,
+        storage: true,
         motion: true
       };
     } catch (error) {
@@ -91,10 +85,19 @@ class PermissionsService {
 
   async requestCameraPermission(): Promise<boolean> {
     try {
-      if (!Capacitor.isNativePlatform() || !Permissions) return true;
+      if (!Capacitor.isNativePlatform()) {
+        // On web, test camera access
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          stream.getTracks().forEach(track => track.stop());
+          return true;
+        } catch {
+          return false;
+        }
+      }
       
-      const result = await Permissions.requestPermissions({ permissions: ['camera'] });
-      return result.camera === 'granted';
+      // On native, assume permission will be requested by the camera component
+      return true;
     } catch (error) {
       console.error('Error requesting camera permission:', error);
       return false;
@@ -103,10 +106,19 @@ class PermissionsService {
 
   async requestMicrophonePermission(): Promise<boolean> {
     try {
-      if (!Capacitor.isNativePlatform() || !Permissions) return true;
+      if (!Capacitor.isNativePlatform()) {
+        // On web, test microphone access
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach(track => track.stop());
+          return true;
+        } catch {
+          return false;
+        }
+      }
       
-      const result = await Permissions.requestPermissions({ permissions: ['microphone'] });
-      return result.microphone === 'granted';
+      // On native, assume permission will be requested by the microphone component
+      return true;
     } catch (error) {
       console.error('Error requesting microphone permission:', error);
       return false;
