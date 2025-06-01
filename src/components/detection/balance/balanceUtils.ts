@@ -1,12 +1,9 @@
+
 import { StrokeDetectionResult } from "@/types";
+import { detectionAPI, SensorData } from "@/services/apiService";
 
 // Define constants for thresholds and test duration
-export const ACCELERATION_THRESHOLD = 15; // Adjust as needed
-export const ROTATION_THRESHOLD = 180; // Adjust as needed
-export const GYROSCOPE_THRESHOLD = 5; // Adjust as needed
 export const TEST_DURATION = 15; // Test duration in seconds
-const MIN_REQUIRED_READINGS = 5; // Minimum number of sensor readings required
-const ABNORMAL_THRESHOLD_PERCENTAGE = 25; // Percentage of abnormal readings to consider as abnormal
 
 // Define interfaces for sensor data
 export interface SensorReading {
@@ -17,13 +14,19 @@ export interface SensorReading {
   magnetometer?: { x: number; y: number; z: number; magnitude: number };
 }
 
-// Helper function to calculate variability (standard deviation)
-const calculateVariability = (data: number[]): number => {
-  if (data.length === 0) return 0;
-  const mean = data.reduce((a, b) => a + b, 0) / data.length;
-  const sumOfSquares = data.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0);
-  return Math.sqrt(sumOfSquares / data.length);
-};
+export interface MotionData {
+  x: number;
+  y: number;
+  z: number;
+  timestamp: number;
+}
+
+export interface GaitAnalysisResult {
+  accelerationChange: number;
+  angularTilt: number;
+  overallScore: number;
+  isAbnormal: boolean;
+}
 
 // Helper function to create and download CSV file
 export const createAndDownloadCSV = (data: SensorReading[]): string => {
@@ -43,42 +46,80 @@ export const createAndDownloadCSV = (data: SensorReading[]): string => {
   return csvRows.join('\n');
 };
 
-import { detectionAPI, SensorData } from "@/services/apiService";
+export const analyzeGaitPattern = (accelData: MotionData[], gyroData: MotionData[]): GaitAnalysisResult => {
+  if (accelData.length < 10) {
+    console.log('Insufficient acceleration data');
+    return { 
+      accelerationChange: 0, 
+      angularTilt: 0, 
+      overallScore: 0, 
+      isAbnormal: true 
+    };
+  }
+
+  // Calculate acceleration change using the research formula
+  let totalAccelChange = 0;
+  for (let i = 1; i < accelData.length; i++) {
+    const dx = accelData[i].x - accelData[i-1].x;
+    const dy = accelData[i].y - accelData[i-1].y;
+    const change = Math.sqrt(dx * dx + dy * dy);
+    totalAccelChange += change;
+  }
+  const accelerationChange = totalAccelChange / (accelData.length - 1);
+
+  // Calculate angular tilt using the research formula
+  let totalAngularTilt = 0;
+  if (gyroData.length > 0) {
+    const samplingRate = 50; // 50 Hz
+    for (const gyroPoint of gyroData) {
+      const ax = Math.abs(gyroPoint.x) / samplingRate * (180 / Math.PI);
+      const ay = Math.abs(gyroPoint.y) / samplingRate * (180 / Math.PI);
+      const az = Math.abs(gyroPoint.z) / samplingRate * (180 / Math.PI);
+      totalAngularTilt += ax + ay + az;
+    }
+  }
+  const angularTilt = totalAngularTilt;
+
+  // Calculate overall score
+  const overallScore = accelerationChange * 0.6 + angularTilt * 0.4;
+
+  console.log('Analysis:', {
+    accelerationChange,
+    angularTilt,
+    overallScore,
+    accelDataLength: accelData.length,
+    gyroDataLength: gyroData.length
+  });
+
+  // Determine if abnormal (adjusted thresholds for walking test)
+  const isAbnormal = accelerationChange > 3.0 || angularTilt > 15.0 || overallScore > 12.0;
+
+  return {
+    accelerationChange,
+    angularTilt,
+    overallScore,
+    isAbnormal
+  };
+};
 
 export const analyzeBalanceData = async (
-  totalReadings: number,
-  abnormalReadings: number,
-  accelerationData: number[],
-  rotationData: number[],
-  gyroscopeData: number[],
-  magnetometerData: number[],
-  rawSensorData: SensorReading[]
+  accelerometerData: MotionData[],
+  gyroscopeData: MotionData[]
 ): Promise<StrokeDetectionResult> => {
   console.log("Starting balance analysis with:", {
-    totalReadings,
-    abnormalReadings,
-    accelerationData: accelerationData.length,
-    rotationData: rotationData.length,
-    gyroscopeData: gyroscopeData.length,
-    rawSensorData: rawSensorData.length
+    accelerometerData: accelerometerData.length,
+    gyroscopeData: gyroscopeData.length
   });
 
   const userId = localStorage.getItem("userId");
   
-  if (userId && rawSensorData.length > 0) {
+  // First try backend analysis if user is logged in
+  if (userId && accelerometerData.length > 0) {
     try {
       const sensorData: SensorData = {
         user_id: userId,
-        accel: rawSensorData.map(reading => [
-          reading.acceleration.x,
-          reading.acceleration.y,
-          reading.acceleration.z
-        ]),
-        gyro: rawSensorData.map(reading => [
-          reading.gyroscope?.x || 0,
-          reading.gyroscope?.y || 0,
-          reading.gyroscope?.z || 0
-        ])
+        accel: accelerometerData.map(reading => [reading.x, reading.y, reading.z]),
+        gyro: gyroscopeData.map(reading => [reading.x, reading.y, reading.z])
       };
 
       console.log("Sending sensor data to backend for analysis...");
@@ -94,15 +135,8 @@ export const analyzeBalanceData = async (
           timestamp: new Date(),
           details: backendResult.details || "Analysis completed using backend AI model.",
           sensorData: {
-            accelerometer: accelerationData,
-            gyroscope: gyroscopeData,
-            magnetometer: magnetometerData,
-            abnormalReadingsPercentage: (abnormalReadings / totalReadings) * 100,
-            rawData: rawSensorData.map(reading => ({
-              timestamp: reading.timestamp,
-              acceleration: reading.acceleration,
-              orientation: reading.orientation
-            })),
+            accelerometer: accelerometerData.map(d => d.x),
+            gyroscope: gyroscopeData.map(d => d.x),
             connectionStatus: 'connected'
           }
         };
@@ -112,62 +146,17 @@ export const analyzeBalanceData = async (
     }
   }
 
-  let result: 'normal' | 'abnormal' | 'inconclusive' = 'inconclusive';
-  let details = '';
-
-  if (totalReadings < MIN_REQUIRED_READINGS) {
-    result = 'inconclusive';
-    details = `Insufficient data collected. Got ${totalReadings} readings, need at least ${MIN_REQUIRED_READINGS}.\n`;
-    details += "Please ensure your device's motion sensors are working and try the test again.";
-  } else {
-    const abnormalPercentage = (abnormalReadings / totalReadings) * 100;
-    
-    const accelVariability = calculateVariability(accelerationData);
-    const rotationVariability = calculateVariability(rotationData);
-    const gyroVariability = calculateVariability(gyroscopeData);
-    
-    console.log("Analysis metrics:", {
-      abnormalPercentage,
-      accelVariability,
-      rotationVariability,
-      gyroVariability
-    });
-    
-    if (abnormalPercentage > ABNORMAL_THRESHOLD_PERCENTAGE) {
-      result = 'abnormal';
-      details = `High instability detected (${abnormalPercentage.toFixed(1)}% abnormal readings).\n`;
-      details += `Motion variability: Acceleration=${accelVariability.toFixed(2)}, Rotation=${rotationVariability.toFixed(2)}, Gyroscope=${gyroVariability.toFixed(2)}`;
-    } else if (abnormalPercentage > 10) {
-      result = 'abnormal';
-      details = `Moderate balance concerns detected (${abnormalPercentage.toFixed(1)}% abnormal readings).\n`;
-      details += "Some irregularities in movement patterns observed.";
-    } else {
-      result = 'normal';
-      details = `Balance appears normal (${abnormalPercentage.toFixed(1)}% abnormal readings).\n`;
-      details += `Motion patterns are within expected ranges.`;
-    }
-  }
-
+  // Fallback to local gait analysis
+  const gaitResult = analyzeGaitPattern(accelerometerData, gyroscopeData);
+  
   return {
     detectionType: 'balance',
-    result,
+    result: gaitResult.isAbnormal ? 'abnormal' : 'normal',
     timestamp: new Date(),
-    details,
+    details: `Gait Analysis - Acceleration Change: ${gaitResult.accelerationChange.toFixed(2)}, Angular Tilt: ${gaitResult.angularTilt.toFixed(2)}, Overall Score: ${gaitResult.overallScore.toFixed(2)}`,
     sensorData: {
-      accelerometer: accelerationData,
-      gyroscope: gyroscopeData,
-      magnetometer: magnetometerData,
-      abnormalReadingsPercentage: totalReadings > 0 ? (abnormalReadings / totalReadings) * 100 : 0,
-      variability: {
-        acceleration: calculateVariability(accelerationData),
-        rotation: calculateVariability(rotationData),
-        magnetic: calculateVariability(magnetometerData)
-      },
-      rawData: rawSensorData.map(reading => ({
-        timestamp: reading.timestamp,
-        acceleration: reading.acceleration,
-        orientation: reading.orientation
-      })),
+      accelerometer: accelerometerData.map(d => d.x),
+      gyroscope: gyroscopeData.map(d => d.x),
       connectionStatus: 'connected'
     }
   };
